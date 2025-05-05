@@ -1,134 +1,39 @@
 ---
-- name: IT Risk Metrics Email Notification
-  hosts: localhost
-  vars:
-    # survey_appcode: "{{ survey_appcode | default('ATU0')}}"
-    survey_appcode: "ATU0"
-    # vault_env: "{{ vault_environment | default('DEV')}}"
-    # secrets:
-    #   - namespace: vault_credentials
-    #     app_code: "{{ survey_appcode | upper }}"
-    #     vault_env: "{{ vault_environment }}"
-    #     vault_secret_path: "AAP/server_compliance_reporting/credentials"
-    #   - namespace: vault_extravars
-    #     app_code: "{{ survey_appcode | upper }}"
-    #     vault_env: "{{ vault_environment }}"
-    #     vault_secret_path: "AAP/server_compliance_reporting/extra_vars"
+- name: Assign secrets to dedicated variables
+  ansible.builtin.set_fact:
+    es_service_id: "SATU0SRVECEWRITE"
+    es_service_id_password: "R4@.iE@GmdVMp3"
+  no_log: true
 
-  roles:
-    # - role: rbc_common.hashicorp_vault.vault_init
-    #   vars:
-    #     survey_appcode: "{{ survey_appcode | default('ATU0')}}"
-    #     # vault_environment: "{{ vault_environment | default('DEV')}}"
-    #     # vault_environment:
-    #     #   - DEV
-    #     #   - QAT
-    #     #   - PROD
+- name: Assign extra vars to dedicated variables
+  ansible.builtin.set_fact:
+    to: "feyi.sodipo@rbc.com"
+    es_url: "https://e87a6cd02ed34b0b844d64cc7d8c41a9.ece.saifg.rbc.com:9243"
+    server_compliance_metrics_index: "atu0-server-compliance-metrics"
+    app_codes: "ATU0"
 
-  tasks:
-  - name: Assign secrets to dedicated variables
+- name: Installing elastic module
+  ansible.builtin.pip:
+    name: elasticsearch
+    state: present
+
+- name: Fetch data from Elasticsearch
+  ansible.builtin.include_tasks: fetch_data.yml
+
+- name: Process data and generate reports
+  ansible.builtin.include_tasks: process_data.yml
+
+- name: Loop through app codes and notify app custodian
+  block:
+  - name: Get custodian email for appcode
     ansible.builtin.set_fact:
-      es_service_id: "SATU0SRVECWRITE"
-      # es_service_id: "{{ vault[vault_environment].vault_credentials.es_service_id }}"
-      es_service_id_password: "R4@.iE@GmdVMp3"
-      # es_service_id_password: "{{ vault[vault_environment].vault_credentials.es_service_id_password }}"
-      no_log: true
+      custodian_email: "feyi.sodipo@rbc.com"
 
-  - name: Assign extra vars to dedicated variables
-    ansible.builtin.set_fact:
-      to: "feyi.sodipo@rbc.com"
-      # to: "{{ vault[vault_environment].vault_extravars.to }}"
-      es_url: "https://e87a6cd02ed34b0b844d64cc7d8c41a9.ece.saifg.rbc.com:9243"
-      # es_url: "{{ vault[vault_environment].vault_extravars.es_url }}"
-      server_compliance_metrics_index: "atu0-server-compliance-metrics"
-      # server_compliance_metrics_index: "{{ vault[vault_environment].vault_extravars.server_compliance_index }}"
-
-  - name: Installing elastic module
-    ansible.builtin.pip:
-      name: elasticsearch
-      state: present
-
-  - name: Fetch data from Elasticsearch
-    ansible.builtin.include_tasks: roles/tasks/fetch_data.yml
-    vars:
-      app_codes: "ATU0"
-
-  - name: Process data and generate reports
-    ansible.builtin.include_tasks: roles/tasks/process_data.yml
-
-  - name: Loop through app codes and notify app custodian
-    vars:
-      vault_path: "AAP/server_compliance_reporting/extra_vars"
-    block:
-    - name: Get custodian email for appcode
-      ansible.builtin.set_fact:
-        custodian_email: "feyi.sodipo@rbc.com"
-        # custodian_email: "{{ lookup('vault_path')}}"
-
-    - name: Create temporary email content file
-      ansible.builtin.copy:
-        content: |
-          Dear Team,
-
-          Please find below the latest IT risk metrics Overview for app code: ATU0.
-
-          ==========================
-          Windows Server Vulnerabilities - [5]
-          ==========================
-          Priority | Issue Name
-          -----------------------------
-          P2      | CVE-2023-12345
-          P2      | CVE-2023-23456
-          P2      | CVE-2023-34567
-          P2      | CVE-2023-45678
-          P2      | CVE-2023-56789
-
-          ==========================
-          Cryptography - [3]
-          ==========================
-          Cryptography Issues - [Count]: 3
-
-          Best regards,
-          ATU0 Compliance Team
-          Security Engineering
-          feyi.sodipo@rbc.com
-        dest: "{{ playbook_dir }}/roles/files/ATU0_email.txt"
-      register: email_file
-
-    - name: Load generated email content
-      ansible.builtin.slurp:
-        src: "{{ playbook_dir }}/roles/files/ATU0_email.txt"
-      register: email_content_raw
-
-    - name: Decode email content
-      ansible.builtin.set_fact:
-        email_content: "{{ email_content_raw['content'] | b64decode }}"
-
-    - name: Send email notification
-      ansible.builtin.debug:
-        msg: |
-          Sending email to: {{ custodian_email }}
-          Subject: ATU0 - Server Compliance Overview
-          Body:
-          {{ email_content }}
-
-    # Replace debug with actual email in a production environment
-    # For demonstration, we're using debug
-    # - name: Send email
-    #   community.general.mail:
-    #     host: smtp.rbc.com
-    #     port: 25
-    #     to: "{{ custodian_email }}"
-    #     subject: "ATU0 - Server Compliance Overview"
-    #     body: "{{ email_content }}"
-    #   register: mail_result
-
-    # - name: Debug mail result
-    #   ansible.builtin.debug:
-    #     var: mail_result
-
-    - name: Send notification upon data successfully indexed
-      ansible.builtin.debug:
-        msg: |
-          Email sent successfully to: {{ custodian_email }}
-          Subject: ATU0 - Server Compliance Overview 
+  - name: Send notification upon data successfully indexed
+    ansible.builtin.debug:
+      msg: |
+        email_to: feyi.sodipo@rbc.com
+        subject: ATU0 - Server Compliance Overview
+        body:
+          Hello,
+          The data has been processed and indexed successfully.

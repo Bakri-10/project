@@ -1,0 +1,16 @@
+---
+- name: Server Compliance Email Notification
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    app_codes: "ATU0"
+    es_url: "https://e87a6cd02ed34b0b844d64cc7d8c41a9.ece.saifg.rbc.com:9243"
+    es_service_id: "SATU0SRVECEWRITE"
+    es_service_id_password: "R4@.iE@GmdVMp3"
+    server_compliance_metrics_index: "atu0-server-compliance-metrics"
+
+  tasks:
+  - name: Include main tasks
+    ansible.builtin.include_tasks: roles/tasks/main.yml

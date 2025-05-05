@@ -56,22 +56,22 @@ def fetch_data(es, index_name, app_codes):
                                         "aggs": {
                                             "unique_issues": {
                                                 "cardinality": {"field": "issueName.keyword"}
-                                            }
-                                        }
-                                    },
-                                    "p1_count": {
-                                        "filter": {"term": {"priority.keyword": "P1"}},
-                                        "aggs": {
-                                            "issue_names": {
-                                                "terms": {"field": "issueName.keyword", "size": 1000}
-                                            }
-                                        }
-                                    },
-                                    "p2_count": {
-                                        "filter": {"term": {"priority.keyword": "P2"}},
-                                        "aggs": {
-                                            "issue_names": {
-                                                "terms": {"field": "issueName.keyword", "size": 1000}
+                                            },
+                                            "p1_count": {
+                                                "filter": {"term": {"priority.keyword": "P1"}},
+                                                "aggs": {
+                                                    "issue_names": {
+                                                        "terms": {"field": "issueName.keyword", "size": 1000}
+                                                    }
+                                                }
+                                            },
+                                            "p2_count": {
+                                                "filter": {"term": {"priority.keyword": "P2"}},
+                                                "aggs": {
+                                                    "issue_names": {
+                                                        "terms": {"field": "issueName.keyword", "size": 1000}
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -153,22 +153,6 @@ def fetch_data(es, index_name, app_codes):
                                         "aggs": {
                                             "unique_issues": {
                                                 "cardinality": {"field": "issueName.keyword"}
-                                            },
-                                            "p1_count": {
-                                                "filter": {"term": {"priority.keyword": "P1"}},
-                                                "aggs": {
-                                                    "issue_names": {
-                                                        "terms": {"field": "issueName.keyword", "size": 10}
-                                                    }
-                                                }
-                                            },
-                                            "p2_count": {
-                                                "filter": {"term": {"priority.keyword": "P2"}},
-                                                "aggs": {
-                                                    "issue_names": {
-                                                        "terms": {"field": "issueName.keyword", "size": 10}
-                                                    }
-                                                }
                                             }
                                         }
                                     }
@@ -187,12 +171,14 @@ def fetch_data(es, index_name, app_codes):
             results[key] = response
         except Exception as e:
             logging.error(f"Error fetching data for {key}: {e}")
+    
     return results
 
 def save_results_to_json(results):
     for key, result in results.items():
         with open(f'{key}.json', 'w') as f:
             json.dump(result, f)
+        logging.info(f"Saved JSON file: {key}.json")
 
 def main(argv):
     args = parse_arguments()
@@ -201,13 +187,13 @@ def main(argv):
     es_password = args.es_password
     index_name = args.index_name
     app_codes = args.app_codes
-
+    
     es = Elasticsearch(
         [es_url],
         http_auth=HTTPBasicAuth(es_service_id, es_password),
         node_class='requests'
     )
-
+    
     logging.info("Fetching data from Elasticsearch")
     results = fetch_data(es, index_name, app_codes)
     logging.info("Saving results to JSON files")
