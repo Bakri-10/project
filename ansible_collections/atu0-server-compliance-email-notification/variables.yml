@@ -1,0 +1,39 @@
+---
+# Variables file for Tower/AWX job template
+# This file demonstrates the variables that should be provided in your Tower/AWX job template survey
+
+# Application code (defaults to ATU0 if not specified)
+survey_appcode: "ATU0"
+
+# Elasticsearch connection details
+# These should be securely stored in Tower credentials or provided via survey
+es_url: "https://e87a6cd02ed34b0b844d64cc7d8c41a9.ece.saifg.rbc.com:9243"
+es_service_id: "SATU0SRVECWRITE"
+es_service_id_password: "R4@.iE@GmdVMp3" # This should be marked as sensitive in Tower/AWX
+
+# Elasticsearch index name for server compliance metrics
+server_compliance_metrics_index: "atu0-server-compliance-metrics"
+
+# Email notification recipient 
+email_to: "feyi.sodipo@rbc.com"
+
+# Application codes to include in the report
+app_codes: "ATU0"
+
+# SMTP settings for email delivery
+smtp_host: "smtp.rbc.com"
+smtp_port: 25
+
+# Optional: Date range for data queries (defaults to current date if not specified)
+# query_date_from: "2025-02-01T00:00:00"
+# query_date_to: "2025-02-28T23:59:59"
+
+# Optional: Custom email template path
+# email_template_path: "/custom/path/to/email_template.txt"
+
+# Optional: Additional email settings
+# email_cc: "manager@example.com"
+# email_subject_prefix: "URGENT: "
+
+# Optional: Logging level
+# log_level: "INFO"  # Options: DEBUG, INFO, WARNING, ERROR 
