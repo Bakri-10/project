@@ -10,6 +10,14 @@
     - "temp"
     - "output"
 
+  - name: Set app_codes as a list if it's a string
+    ansible.builtin.set_fact:
+      app_codes_list: "{{ [app_codes] if app_codes is string else app_codes }}"
+
+  - name: Display app_codes variable
+    ansible.builtin.debug:
+      var: app_codes_list
+
   - name: Execute python script to fetch data from Elasticsearch
     ansible.builtin.command:
       argv:
@@ -24,9 +32,11 @@
       - "--index-name"
       - "{{ server_compliance_metrics_index }}"
       - "--app-codes"
-      - "{{ app_codes }}"
+      - "{{ app_codes_list | join(' ') }}"
     environment:
       PYTHONPATH: "{{ playbook_dir }}/roles/files"
+      LC_ALL: "C.UTF-8"
+      LANG: "C.UTF-8"
     register: fetch_data_response
 
   - name: Debug fetch data response

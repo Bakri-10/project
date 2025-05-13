@@ -1,12 +1,11 @@
 import json
 import logging
 import os
-import http.client
 import urllib.parse
 import base64
 import argparse
-from requests.auth import HTTPBasicAuth
 from elasticsearch import Elasticsearch
+import ssl
 import sys
 
 # Configure logging
@@ -170,15 +169,23 @@ def fetch_data(es, index_name, app_codes):
             response = es.search(index=query['index'], body=query['body'])
             results[key] = response
         except Exception as e:
-            logging.error(f"Error fetching data for {key}: {e}")
+            logging.error(f"Error fetching data for {key}: {str(e)}")
+            # Create an empty response structure to avoid processing errors
+            results[key] = {"aggregations": {"by_appCode": {"buckets": []}}}
     
     return results
 
 def save_results_to_json(results):
+    # Create temp directory if it doesn't exist
+    temp_dir = "temp"
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
+        
     for key, result in results.items():
-        with open(f'{key}.json', 'w') as f:
-            json.dump(result, f)
-        logging.info(f"Saved JSON file: {key}.json")
+        output_file = os.path.join(temp_dir, f'{key}.json')
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(result, f, ensure_ascii=False)
+        logging.info(f"Saved JSON file: {output_file}")
 
 def main(argv):
     args = parse_arguments()
@@ -188,17 +195,41 @@ def main(argv):
     index_name = args.index_name
     app_codes = args.app_codes
     
-    es = Elasticsearch(
-        [es_url],
-        http_auth=HTTPBasicAuth(es_service_id, es_password),
-        node_class='requests'
-    )
+    # Log received parameters (excluding password)
+    logging.info(f"Elasticsearch URL: {es_url}")
+    logging.info(f"Index name: {index_name}")
+    logging.info(f"App codes: {app_codes}")
     
-    logging.info("Fetching data from Elasticsearch")
-    results = fetch_data(es, index_name, app_codes)
-    logging.info("Saving results to JSON files")
-    save_results_to_json(results)
-    logging.info("Data fetching complete")
+    # Create Elasticsearch client with appropriate settings
+    try:
+        context = ssl.create_default_context()
+        # For self-signed certificates, you might need this
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        
+        es = Elasticsearch(
+            hosts=[es_url],
+            basic_auth=(es_service_id, es_password),
+            ssl_context=context,
+            verify_certs=False,
+            timeout=30
+        )
+        
+        # Verify connection
+        if not es.ping():
+            logging.error("Elasticsearch connection failed")
+            sys.exit(1)
+            
+        logging.info("Connected to Elasticsearch successfully")
+        logging.info("Fetching data from Elasticsearch")
+        results = fetch_data(es, index_name, app_codes)
+        logging.info("Saving results to JSON files")
+        save_results_to_json(results)
+        logging.info("Data fetching complete")
+        
+    except Exception as e:
+        logging.error(f"Error connecting to Elasticsearch: {str(e)}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main(sys.argv[1:]) 

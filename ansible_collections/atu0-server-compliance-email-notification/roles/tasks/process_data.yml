@@ -12,6 +12,8 @@
       - "{{ playbook_dir }}/roles/files/output"
     environment:
       PYTHONPATH: "{{ playbook_dir }}/roles/files"
+      LC_ALL: "C.UTF-8"
+      LANG: "C.UTF-8"
     register: process_data_response
 
   - name: Debug process data response
