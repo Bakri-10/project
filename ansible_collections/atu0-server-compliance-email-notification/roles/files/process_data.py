@@ -105,8 +105,8 @@ def process_data(results):
 
 def save_to_csv(processed_data, output_dir):
     # Create output directory if it doesn't exist
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+    logging.info(f"Using output directory: {output_dir}")
         
     for app_code, data in processed_data.items():
         for item_type, records in data.items():
@@ -130,8 +130,8 @@ def save_to_csv(processed_data, output_dir):
 
 def generate_email_content(processed_data, output_dir):
     # Create output directory if it doesn't exist
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+    logging.info(f"Using output directory for email content: {output_dir}")
         
     email_content = {}
     for app_code, data in processed_data.items():
@@ -168,13 +168,19 @@ def generate_email_content(processed_data, output_dir):
 def main():
     try:
         args = parse_arguments()
-        logging.info(f"Input directory: {args.input_dir}")
-        logging.info(f"Output directory: {args.output_dir}")
+        input_dir = args.input_dir
+        output_dir = args.output_dir
         
-        results = load_results_from_json(args.input_dir)
+        logging.info(f"Input directory: {input_dir}")
+        logging.info(f"Output directory: {output_dir}")
+        
+        # Create output directory if it doesn't exist
+        os.makedirs(output_dir, exist_ok=True)
+        
+        results = load_results_from_json(input_dir)
         processed_data = process_data(results)
-        save_to_csv(processed_data, args.output_dir)
-        generate_email_content(processed_data, args.output_dir)
+        save_to_csv(processed_data, output_dir)
+        generate_email_content(processed_data, output_dir)
         
         logging.info("Data processing complete")
     except Exception as e:

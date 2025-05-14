@@ -1,10 +1,18 @@
 ---
 - name: Block to execute python script to process data and generate reports
   block:
+  - name: Create output directory if it doesn't exist
+    ansible.builtin.file:
+      path: "{{ playbook_dir }}/roles/files/output"
+      state: directory
+      mode: '0755'
+
   - name: Execute python script to process data and generate reports
     ansible.builtin.shell:
-      cmd: >
-        python3 {{ playbook_dir }}/roles/files/process_data.py --input-dir "{{ playbook_dir }}/roles/files" --output-dir "{{ playbook_dir }}/roles/files/output"
+      cmd: |
+        python3 {{ playbook_dir }}/roles/files/process_data.py \
+        --input-dir "{{ playbook_dir }}/roles/files" \
+        --output-dir "{{ playbook_dir }}/roles/files/output"
       chdir: "{{ playbook_dir }}/roles/files"
     environment:
       PYTHONPATH: "{{ playbook_dir }}/roles/files"
