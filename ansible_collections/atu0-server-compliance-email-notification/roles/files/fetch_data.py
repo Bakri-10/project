@@ -22,6 +22,27 @@ def parse_arguments():
     parser.add_argument('--app-codes', required=True, nargs='+', help='List of application codes')
     return parser.parse_args()
 
+# Custom JSON encoder to handle non-serializable objects
+class ElasticsearchEncoder(json.JSONEncoder):
+    def default(self, obj):
+        # Convert non-serializable objects to strings
+        try:
+            return super().default(obj)
+        except TypeError:
+            return str(obj)
+
+def make_serializable(obj):
+    """Convert a complex object to serializable format."""
+    if isinstance(obj, dict):
+        return {k: make_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [make_serializable(i) for i in obj]
+    elif isinstance(obj, (int, float, str, bool, type(None))):
+        return obj
+    else:
+        # Convert any other type to string
+        return str(obj)
+
 def fetch_data(es, index_name, app_codes):
     # Calculate date range (today)
     today = datetime.now()
@@ -182,7 +203,11 @@ def fetch_data(es, index_name, app_codes):
             except TypeError:
                 # For newer Elasticsearch client versions
                 response = es.search(index=query['index'], **query['body'])
-            results[key] = response
+            
+            # Convert Elasticsearch response to a serializable format
+            serializable_response = make_serializable(response)
+            results[key] = serializable_response
+            
         except Exception as e:
             logging.error(f"Error fetching data for {key}: {str(e)}")
             # Create an empty response structure to avoid processing errors
@@ -198,9 +223,17 @@ def save_results_to_json(results):
         
     for key, result in results.items():
         output_file = os.path.join(temp_dir, f'{key}.json')
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(result, f, ensure_ascii=False)
-        logging.info(f"Saved JSON file: {output_file}")
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(result, f, ensure_ascii=False, cls=ElasticsearchEncoder)
+            logging.info(f"Saved JSON file: {output_file}")
+        except Exception as e:
+            logging.error(f"Error saving JSON file {output_file}: {str(e)}")
+            # Save a simplified version if regular serialization fails
+            with open(output_file, 'w', encoding='utf-8') as f:
+                simplified = {"error": "Could not serialize full response", "partial_data": str(result)[:1000]}
+                json.dump(simplified, f)
+            logging.info(f"Saved simplified JSON file: {output_file}")
 
 def main(argv):
     args = parse_arguments()

@@ -11,6 +11,18 @@
     - "temp"
     - "output"
 
+  - name: Ensure Python dependencies are installed
+    ansible.builtin.pip:
+      requirements: "{{ playbook_dir }}/roles/files/requirements.txt"
+      extra_args: "--user"
+    register: pip_result
+    ignore_errors: yes
+
+  - name: Display pip installation result
+    ansible.builtin.debug:
+      var: pip_result
+    when: pip_result is defined
+
   - name: Set app_codes as a list if it's a string
     ansible.builtin.set_fact:
       app_codes_list: "{{ [app_codes] if app_codes is string else app_codes }}"
@@ -21,7 +33,13 @@
 
   - name: Execute python script to fetch data from Elasticsearch
     ansible.builtin.shell:
-      cmd: "python3 {{ playbook_dir }}/roles/files/fetch_data.py --es-url '{{ es_url }}' --es-service-id '{{ es_service_id }}' --es-password '{{ es_service_id_password }}' --index-name '{{ server_compliance_metrics_index }}' --app-codes {% for code in app_codes_list %}'{{ code }}' {% endfor %}"
+      cmd: |
+        python3 {{ playbook_dir }}/roles/files/fetch_data.py \
+        --es-url '{{ es_url }}' \
+        --es-service-id '{{ es_service_id }}' \
+        --es-password '{{ es_service_id_password }}' \
+        --index-name '{{ server_compliance_metrics_index }}' \
+        --app-codes {{ app_codes_list | map('quote') | join(' ') }}
       chdir: "{{ playbook_dir }}/roles/files"
     environment:
       PYTHONPATH: "{{ playbook_dir }}/roles/files"
