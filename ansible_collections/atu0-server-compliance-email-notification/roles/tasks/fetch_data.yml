@@ -19,20 +19,10 @@
       var: app_codes_list
 
   - name: Execute python script to fetch data from Elasticsearch
-    ansible.builtin.command:
-      argv:
-      - python3
-      - "{{ playbook_dir }}/roles/files/fetch_data.py"
-      - "--es-url"
-      - "{{ es_url }}"
-      - "--es-service-id"
-      - "{{ es_service_id }}"
-      - "--es-password"
-      - "{{ es_service_id_password }}"
-      - "--index-name"
-      - "{{ server_compliance_metrics_index }}"
-      - "--app-codes"
-      - "{{ app_codes_list | join(' ') }}"
+    ansible.builtin.shell:
+      cmd: >
+        python3 {{ playbook_dir }}/roles/files/fetch_data.py --es-url "{{ es_url }}" --es-service-id "{{ es_service_id }}" --es-password "{{ es_service_id_password }}" --index-name "{{ server_compliance_metrics_index }}" --app-codes {{ app_codes_list | join(' ') }}
+      chdir: "{{ playbook_dir }}/roles/files"
     environment:
       PYTHONPATH: "{{ playbook_dir }}/roles/files"
       LC_ALL: "C.UTF-8"

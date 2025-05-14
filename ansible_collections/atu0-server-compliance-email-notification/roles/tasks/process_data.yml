@@ -2,14 +2,10 @@
 - name: Block to execute python script to process data and generate reports
   block:
   - name: Execute python script to process data and generate reports
-    ansible.builtin.command:
-      argv:
-      - python3
-      - "{{ playbook_dir }}/roles/files/process_data.py"
-      - "--input-dir"
-      - "{{ playbook_dir }}/roles/files"
-      - "--output-dir"
-      - "{{ playbook_dir }}/roles/files/output"
+    ansible.builtin.shell:
+      cmd: >
+        python3 {{ playbook_dir }}/roles/files/process_data.py --input-dir "{{ playbook_dir }}/roles/files" --output-dir "{{ playbook_dir }}/roles/files/output"
+      chdir: "{{ playbook_dir }}/roles/files"
     environment:
       PYTHONPATH: "{{ playbook_dir }}/roles/files"
       LC_ALL: "C.UTF-8"
