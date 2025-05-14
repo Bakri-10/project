@@ -11,10 +11,9 @@
     - "temp"
     - "output"
 
-  - name: Ensure Python dependencies are installed
-    ansible.builtin.pip:
-      requirements: "{{ playbook_dir }}/roles/files/requirements.txt"
-      extra_args: "--user"
+  - name: Install required Python packages directly
+    ansible.builtin.shell:
+      cmd: "pip3 install elasticsearch>=7.0.0,<8.0.0 urllib3<2.0.0"
     register: pip_result
     ignore_errors: yes
 

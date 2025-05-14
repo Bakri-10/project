@@ -1,17 +1,29 @@
 # Fix for Elasticsearch compatibility issues
 import json
-import logging
 import os
 import urllib.parse
 import base64
 import argparse
-from elasticsearch import Elasticsearch
 import ssl
 import sys
+import logging
 from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Try to import Elasticsearch, with a fallback
+try:
+    from elasticsearch import Elasticsearch
+except ImportError:
+    logging.error("Elasticsearch module not found. Trying to install it...")
+    try:
+        import subprocess
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "elasticsearch>=7.0.0,<8.0.0", "urllib3<2.0.0"])
+        from elasticsearch import Elasticsearch
+    except Exception as e:
+        logging.error(f"Failed to install elasticsearch module: {str(e)}")
+        sys.exit(1)
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Fetch data from Elasticsearch and save to JSON files')
