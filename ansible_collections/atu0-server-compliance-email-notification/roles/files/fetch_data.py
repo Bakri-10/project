@@ -7,6 +7,7 @@ import argparse
 from elasticsearch import Elasticsearch
 import ssl
 import sys
+from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -21,6 +22,13 @@ def parse_arguments():
     return parser.parse_args()
 
 def fetch_data(es, index_name, app_codes):
+    # Calculate date range (today)
+    today = datetime.now()
+    start_date = today.replace(hour=0, minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M:%S")
+    end_date = today.replace(hour=23, minute=59, second=59, microsecond=999999).strftime("%Y-%m-%dT%H:%M:%S")
+    
+    logging.info(f"Using date range: {start_date} to {end_date}")
+    
     results = {}
     queries = {
         "p1_p2_vulnerabilities": {
@@ -32,7 +40,7 @@ def fetch_data(es, index_name, app_codes):
                         "must": [
                             {"term": {"issueType.keyword": "Vulnerability"}},
                             {"terms": {"appCode.keyword": app_codes}},
-                            {"range": {"timestamp": {"gte": "2025-02-21T00:00:00", "lte": "2025-02-21T23:59:59"}}}
+                            {"range": {"timestamp": {"gte": start_date, "lte": end_date}}}
                         ],
                         "must_not": [
                             {"term": {"priority.keyword": "P3"}},
@@ -90,7 +98,7 @@ def fetch_data(es, index_name, app_codes):
                         "must": [
                             {"terms": {"issueType.keyword": ["TSS", "Open Data", "Cryptography"]}},
                             {"terms": {"appCode.keyword": app_codes}},
-                            {"range": {"timestamp": {"gte": "2025-02-21T00:00:00", "lte": "2025-02-21T23:59:59"}}}
+                            {"range": {"timestamp": {"gte": start_date, "lte": end_date}}}
                         ]
                     }
                 },
@@ -128,7 +136,7 @@ def fetch_data(es, index_name, app_codes):
                         "must": [
                             {"term": {"issueType.keyword": "Vulnerability"}},
                             {"terms": {"appCode.keyword": app_codes}},
-                            {"range": {"timestamp": {"gte": "2025-02-21T00:00:00", "lte": "2025-02-21T23:59:59"}}}
+                            {"range": {"timestamp": {"gte": start_date, "lte": end_date}}}
                         ],
                         "must_not": [
                             {"term": {"priority.keyword": "P3"}},
