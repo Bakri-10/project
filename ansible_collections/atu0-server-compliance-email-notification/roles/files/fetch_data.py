@@ -19,7 +19,7 @@ except ImportError:
     logging.error("Elasticsearch module not found. Trying to install it...")
     try:
         import subprocess
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "elasticsearch>=7.0.0,<8.0.0", "urllib3<2.0.0"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "elasticsearch==8.15.0", "urllib3<2.0.0"])
         from elasticsearch import Elasticsearch
     except Exception as e:
         logging.error(f"Failed to install elasticsearch module: {str(e)}")
@@ -68,7 +68,7 @@ def fetch_data(es, index_name, app_codes):
     queries = {
         "p1_p2_vulnerabilities": {
             "index": index_name,
-            "body": {
+            "query": {
                 "size": 0,
                 "query": {
                     "bool": {
@@ -126,7 +126,7 @@ def fetch_data(es, index_name, app_codes):
         },
         "cryptography_tss_opendata": {
             "index": index_name,
-            "body": {
+            "query": {
                 "size": 0,
                 "query": {
                     "bool": {
@@ -164,7 +164,7 @@ def fetch_data(es, index_name, app_codes):
         },
         "trends": {
             "index": index_name,
-            "body": {
+            "query": {
                 "size": 0,
                 "query": {
                     "bool": {
@@ -209,13 +209,8 @@ def fetch_data(es, index_name, app_codes):
 
     for key, query in queries.items():
         try:
-            # Try different search API formats for compatibility
-            try:
-                response = es.search(index=query['index'], body=query['body'])
-            except TypeError:
-                # For newer Elasticsearch client versions
-                response = es.search(index=query['index'], **query['body'])
-            
+            # Elasticsearch 8.x API
+            response = es.search(**query)
             # Convert Elasticsearch response to a serializable format
             serializable_response = make_serializable(response)
             results[key] = serializable_response
@@ -261,28 +256,14 @@ def main(argv):
     logging.info(f"App codes: {app_codes}")
     
     try:
-        # Create Elasticsearch client - try multiple client initialization approaches
-        try:
-            # Try with newer Elasticsearch client
-            es = Elasticsearch(
-                hosts=[es_url],
-                basic_auth=(es_service_id, es_password),
-                verify_certs=False,
-                timeout=30
-            )
-        except TypeError:
-            # Try with older Elasticsearch client
-            context = ssl.create_default_context()
-            context.check_hostname = False
-            context.verify_mode = ssl.CERT_NONE
-            
-            es = Elasticsearch(
-                [es_url],
-                http_auth=(es_service_id, es_password),
-                ssl_context=context,
-                verify_certs=False,
-                timeout=30
-            )
+        # Create Elasticsearch client for version 8.x
+        es = Elasticsearch(
+            es_url,
+            basic_auth=(es_service_id, es_password),
+            verify_certs=False,
+            ssl_show_warn=False,
+            request_timeout=30
+        )
         
         # Verify connection
         if not es.ping():
