@@ -1,3 +1,4 @@
+# Fix for Elasticsearch compatibility issues
 import json
 import logging
 import os
@@ -28,6 +29,7 @@ def fetch_data(es, index_name, app_codes):
     end_date = today.replace(hour=23, minute=59, second=59, microsecond=999999).strftime("%Y-%m-%dT%H:%M:%S")
     
     logging.info(f"Using date range: {start_date} to {end_date}")
+    logging.info(f"App codes being used: {app_codes}")
     
     results = {}
     queries = {
@@ -174,7 +176,12 @@ def fetch_data(es, index_name, app_codes):
 
     for key, query in queries.items():
         try:
-            response = es.search(index=query['index'], body=query['body'])
+            # Try different search API formats for compatibility
+            try:
+                response = es.search(index=query['index'], body=query['body'])
+            except TypeError:
+                # For newer Elasticsearch client versions
+                response = es.search(index=query['index'], **query['body'])
             results[key] = response
         except Exception as e:
             logging.error(f"Error fetching data for {key}: {str(e)}")
@@ -208,20 +215,29 @@ def main(argv):
     logging.info(f"Index name: {index_name}")
     logging.info(f"App codes: {app_codes}")
     
-    # Create Elasticsearch client with appropriate settings
     try:
-        context = ssl.create_default_context()
-        # For self-signed certificates, you might need this
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        
-        es = Elasticsearch(
-            hosts=[es_url],
-            basic_auth=(es_service_id, es_password),
-            ssl_context=context,
-            verify_certs=False,
-            timeout=30
-        )
+        # Create Elasticsearch client - try multiple client initialization approaches
+        try:
+            # Try with newer Elasticsearch client
+            es = Elasticsearch(
+                hosts=[es_url],
+                basic_auth=(es_service_id, es_password),
+                verify_certs=False,
+                timeout=30
+            )
+        except TypeError:
+            # Try with older Elasticsearch client
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            
+            es = Elasticsearch(
+                [es_url],
+                http_auth=(es_service_id, es_password),
+                ssl_context=context,
+                verify_certs=False,
+                timeout=30
+            )
         
         # Verify connection
         if not es.ping():
