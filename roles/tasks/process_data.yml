@@ -1,16 +1,19 @@
 ---
-# Ansible playbook to process vulnerability data from Elasticsearch
-# This playbook executes a Python script to process the raw data and generate reports
 
 - name: Check if raw data file exists
   stat:
     path: "{{ raw_data_file }}"
   register: input_file_stat
 
+- name: Create empty template file if raw data doesn't exist
+  copy:
+    dest: "{{ raw_data_file }}"
+    content: '{"hits": {"total": {"value": 0}, "hits": []}}'
+  when: not input_file_stat.stat.exists
+
 - name: Process vulnerability data
   command: >
-    python3 {{ role_path }}/files/process_data.py  --input {{ raw_data_file }}  --output {{ processed_report }} --email-template {{ email_template }} --email-output {{ email_content_file }}
-  when: input_file_stat.stat.exists
+    python3 {{ role_path }}/files/process_data.py --input {{ raw_data_file }} --output {{ processed_report }} --email-template {{ email_template }} --email-output {{ email_content_file }}
   register: process_output
   changed_when: false
   failed_when: process_output.rc != 0
