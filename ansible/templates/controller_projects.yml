@@ -1,0 +1,8 @@
+---
+app_controller_projects:
+- name: "{{ .Values.HELIOS_APP_CODE }}_{{ .Values.HELIOS_APP_NAME }}"
+  organization: "{{ .Values.APP_CODE }}"
+  scm_type: git
+  credential: "{{ .Values.HELIOS_APP_CODE }}_Github_PAT"
+  description: "Server Compliance Overview - Ansible automation to pull data from elastic search and email custodians"
+  state: "present" 

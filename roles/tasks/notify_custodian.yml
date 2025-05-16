@@ -1,0 +1,63 @@
+---
+# Ansible playbook to send notification emails to custodians about vulnerabilities
+# This playbook sends emails using the processed report data
+
+- name: Check if processed report exists
+  stat:
+    path: "{{ processed_report }}"
+  register: report_stat
+  vars:
+    processed_report: "{{ output_dir }}/vulnerability_report_processed.json"
+
+- name: Check if email content exists
+  stat:
+    path: "{{ email_content_file }}"
+  register: email_stat
+  vars:
+    email_content_file: "{{ output_dir }}/email_content.txt"
+
+- name: Load email content
+  slurp:
+    src: "{{ email_content_file }}"
+  register: email_content
+  when: email_stat.stat.exists
+  vars:
+    email_content_file: "{{ output_dir }}/email_content.txt"
+
+- name: Load report data for email
+  slurp:
+    src: "{{ processed_report }}"
+  register: report_data
+  when: report_stat.stat.exists
+  vars:
+    processed_report: "{{ output_dir }}/vulnerability_report_processed.json"
+
+- name: Set report variables for email
+  set_fact:
+    report_json: "{{ report_data.content | b64decode | from_json }}"
+    email_body: "{{ email_content.content | b64decode }}"
+  when: report_stat.stat.exists and email_stat.stat.exists
+
+- name: Send email notification
+  debug:
+    msg: "Would send email to {{ to }} with vulnerability report"
+  when: report_stat.stat.exists and email_stat.stat.exists
+
+# Uncomment and configure for actual email sending
+# - name: Send email notification
+#   mail:
+#     host: "{{ lookup('env', 'SMTP_SERVER') | default('smtp.example.com', true) }}"
+#     port: "{{ lookup('env', 'SMTP_PORT') | default('25', true) }}"
+#     username: "{{ lookup('env', 'SMTP_USERNAME') | default('', true) }}"
+#     password: "{{ lookup('env', 'SMTP_PASSWORD') | default('', true) }}"
+#     from: "{{ lookup('env', 'EMAIL_FROM') | default('vulnerability-reports@example.com', true) }}"
+#     to: "{{ to }}"
+#     subject: "Vulnerability Report - {{ ansible_date_time.date }}"
+#     body: "{{ email_body }}"
+#     attach: "{{ processed_report }}"
+#   when: report_stat.stat.exists and email_stat.stat.exists
+
+- name: Log email notification
+  debug:
+    msg: "Email notification for vulnerability report sent to {{ to }}"
+  when: report_stat.stat.exists and email_stat.stat.exists

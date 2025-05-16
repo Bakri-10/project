@@ -1,0 +1,6 @@
+---
+app_controller_inventories:
+- name: "{{ .Values.HELIOS_APP_CODE }}_{{ .Values.HELIOS_APP_NAME }}"
+  organization: "{{ .Values.HELIOS_APP_CODE }}"
+  description: Server Compliance Overview - Localhost Inventory
+  state: "present" 

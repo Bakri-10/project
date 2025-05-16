@@ -1,0 +1,18 @@
+---
+app_controller_templates:
+- name: "{{ .Values.HELIOS_APP_CODE }}_{{ .Values.HELIOS_APP_NAME }}"
+  job_type: run
+  playbook: main.yml
+  inventory: "{{ .Values.HELIOS_APP_CODE }}_{{ .Values.HELIOS_APP_NAME }}"
+  project: "{{ .Values.HELIOS_APP_CODE }}_{{ .Values.HELIOS_APP_NAME }}"
+  survey_enabled: true
+  ask_credential_on_launch: true
+  description: "Server Compliance Overview Job Template"
+  state: "present"
+  credentials:
+    - "{{ .Values.HELIOS_APP_CODE }}_HashiCorp_Vault_AppRoles"
+  extra_vars:
+    vault_environment: "{{ .Values.VAULT_ENV }}"
+    chorus_environment: "{{ .Values.CHORUS_ENV }}"
+    ansible_domain: "{{ .Values.ansible_domain }}"
+    aap_domain: "{{ .Values.aap_domain }}" 

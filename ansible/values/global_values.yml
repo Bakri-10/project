@@ -1,0 +1,24 @@
+# Global values for atu0-server-compliance-email-notification
+# These values apply to all environments unless overridden
+
+HELIOS_APP_CODE: "ATU0"
+HELIOS_APP_NAME: "server-compliance-email-notification"
+APP_CODE: "ATU0"
+
+# Email configuration
+email_subject_prefix: "[Vulnerability Report]"
+custodian_email_domain: "rbc.com"
+
+# General settings
+elasticsearch_query_size: 1000
+report_retention_days: 30
+vulnerability_types:
+- "Vulnerability"
+- "Risk"
+- "Compliance"
+
+# Application settings
+app_settings:
+  timeout_seconds: 300
+  max_retries: 3
+  retry_delay: 5

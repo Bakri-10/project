@@ -1,0 +1,25 @@
+---
+
+- name: Set common variables
+  set_fact:
+    output_dir: "{{ role_path }}/files/output"
+    temp_dir: "{{ role_path }}/files/temp"
+    raw_data_file: "{{ role_path }}/files/output/vulnerability_report_raw.json"
+
+- name: Ensure output and temp directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+  - "{{ output_dir }}"
+  - "{{ temp_dir }}"
+
+- name: Fetch vulnerability data from Elasticsearch
+  import_tasks: fetch_data.yml
+
+- name: Process vulnerability data
+  import_tasks: process_data.yml
+
+- name: Send notification to custodians
+  import_tasks: notify_custodian.yml

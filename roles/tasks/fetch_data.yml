@@ -1,0 +1,46 @@
+---
+# Ansible playbook to fetch vulnerability data from Elasticsearch
+# This playbook executes a Python script to query Elasticsearch and process the results
+
+- name: Run fetch_data.py to query Elasticsearch
+  command: python3 {{ role_path }}/files/fetch_data.py
+  environment:
+    ES_HOST: "{{ es_url }}"
+    ES_INDEX: "{{ server_compliance_metrics_index }}"
+    APP_CODES: "{{ app_codes | default('ATU0') }}"
+    START_DATE: "{{ lookup('env', 'START_DATE') | default('2024-05-16T00:00:00Z', true) }}"
+    END_DATE: "{{ lookup('env', 'END_DATE') | default('2025-05-16T23:59:59Z', true) }}"
+    OUTPUT_FILE: "{{ raw_data_file }}"
+    ES_USERNAME: "{{ es_service_id | default('') }}"
+    ES_PASSWORD: "{{ es_service_id_password | default('') }}"
+  register: fetch_output
+  changed_when: false
+  failed_when: fetch_output.rc != 0
+
+- name: Debug fetch output
+  debug:
+    msg: "{{ fetch_output.stdout_lines }}"
+  when: fetch_output.stdout_lines is defined and fetch_output.stdout_lines | length > 0
+
+- name: Check if output file exists
+  stat:
+    path: "{{ raw_data_file }}"
+  register: output_file_stat
+
+- name: Load results from file
+  slurp:
+    src: "{{ raw_data_file }}"
+  register: encoded_content
+  when: output_file_stat.stat.exists
+  ignore_errors: true
+
+- name: Count total vulnerabilities
+  set_fact:
+    total_vulnerabilities: "{{ (encoded_content.content | b64decode | from_json).hits.total.value }}"
+  when: output_file_stat.stat.exists and encoded_content is defined and encoded_content.skipped is not defined
+  ignore_errors: true
+
+- name: Display summary
+  debug:
+    msg: "Found {{ total_vulnerabilities }} vulnerabilities for application code {{ app_codes }}"
+  when: output_file_stat.stat.exists and total_vulnerabilities is defined
