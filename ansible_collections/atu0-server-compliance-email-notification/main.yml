@@ -4,8 +4,8 @@
     "bool": {
       "must": [
         { "term": { "issueType.keyword": "Vulnerability" } },
-        { "terms": { "appCode.keyword": ["appCode1", "appCode2"] } },
-        { "range": { "timestamp": { "gte": "start_date", "lte": "end_date" } } }
+        { "terms": { "appCode.keyword": ["ATU0"] } },
+        { "range": { "timestamp": { "gte": "2024-05-16T00:00:00Z", "lte": "2025-05-16T23:59:59Z" } } }
       ],
       "must_not": [
         { "term": { "priority.keyword": "P3" } },
