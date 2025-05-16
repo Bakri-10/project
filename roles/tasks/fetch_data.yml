@@ -1,6 +1,4 @@
 ---
-# Ansible playbook to fetch vulnerability data from Elasticsearch
-# This playbook executes a Python script to query Elasticsearch and process the results
 
 - name: Run fetch_data.py to query Elasticsearch
   command: python3 {{ role_path }}/files/fetch_data.py
