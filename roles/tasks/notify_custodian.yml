@@ -1,63 +1,125 @@
 ---
-# Ansible playbook to send notification emails to custodians about vulnerabilities
-# This playbook sends emails using the processed report data
+- name: Verify required variables
+  ansible.builtin.assert:
+    that:
+    - vault_path is defined
+    - raw_data_file is defined
+    - output_dir is defined
+    - role_path is defined
+    - survey_appcode is defined
+    - vault_env is defined
+    fail_msg: "Missing required variables. Please ensure all required variables are defined"
+
+# Define file paths and environment variables
+- name: Set file path and environment variables
+  set_fact:
+    processed_report: "{{ output_dir }}/vulnerability_report_processed.json"
+    email_content_file: "{{ output_dir }}/email_content.txt"
+    email_template: "{{ role_path }}/files/email_template.txt"
+    app_code: "{{ survey_appcode | upper }}"
+    vault_environment: "{{ vault_env | default('DEV') }}"
+
+# Ensure output directory exists
+- name: Ensure output directory exists
+  file:
+    path: "{{ output_dir }}"
+    state: directory
+    mode: '0755'
 
 - name: Check if processed report exists
   stat:
     path: "{{ processed_report }}"
   register: report_stat
-  vars:
-    processed_report: "{{ output_dir }}/vulnerability_report_processed.json"
 
 - name: Check if email content exists
   stat:
     path: "{{ email_content_file }}"
   register: email_stat
-  vars:
-    email_content_file: "{{ output_dir }}/email_content.txt"
 
 - name: Load email content
   slurp:
     src: "{{ email_content_file }}"
   register: email_content
   when: email_stat.stat.exists
-  vars:
-    email_content_file: "{{ output_dir }}/email_content.txt"
 
 - name: Load report data for email
   slurp:
     src: "{{ processed_report }}"
   register: report_data
   when: report_stat.stat.exists
-  vars:
-    processed_report: "{{ output_dir }}/vulnerability_report_processed.json"
 
 - name: Set report variables for email
   set_fact:
     report_json: "{{ report_data.content | b64decode | from_json }}"
     email_body: "{{ email_content.content | b64decode }}"
+    report_date: "{{ ansible_date_time.date }}"
+    total_vulnerabilities: "{{ report_json.summary.total_vulnerabilities | default(0) }}"
+    start_date: "{{ report_json.summary.start_date | default(ansible_date_time.date) }}"
+    end_date: "{{ report_json.summary.end_date | default(ansible_date_time.date) }}"
+    high_severity_count: "{{ report_json.summary.high_severity_count | default(0) }}"
   when: report_stat.stat.exists and email_stat.stat.exists
 
-- name: Send email notification
-  debug:
-    msg: "Would send email to {{ to }} with vulnerability report"
-  when: report_stat.stat.exists and email_stat.stat.exists
+# Get email recipient from vault with fallback
+- name: Get email recipient from vault
+  block:
+  - name: Try vault lookup
+    set_fact:
+      email_recipient: "{{ lookup('vars', 'vault')[vault_environment]['vault_extravars']['to'] }}"
+    when: vault is defined
+  rescue:
+  - name: Use default recipient on vault lookup failure
+    set_fact:
+      email_recipient: "{{ to }}"
 
-# Uncomment and configure for actual email sending
-# - name: Send email notification
-#   mail:
-#     host: "{{ lookup('env', 'SMTP_SERVER') | default('smtp.example.com', true) }}"
-#     port: "{{ lookup('env', 'SMTP_PORT') | default('25', true) }}"
-#     username: "{{ lookup('env', 'SMTP_USERNAME') | default('', true) }}"
-#     password: "{{ lookup('env', 'SMTP_PASSWORD') | default('', true) }}"
-#     from: "{{ lookup('env', 'EMAIL_FROM') | default('vulnerability-reports@example.com', true) }}"
-#     to: "{{ to }}"
-#     subject: "Vulnerability Report - {{ ansible_date_time.date }}"
-#     body: "{{ email_body }}"
-#     attach: "{{ processed_report }}"
-#   when: report_stat.stat.exists and email_stat.stat.exists
+- name: Send vulnerability report notification
+  ansible.builtin.include_role:
+    name: rbc_sfmo.components.email
+  vars:
+    appcode: "{{ app_code }}"
+    email_to: "{{ email_recipient }}"
+    email_cc: []
+    email_subject: "Vulnerability Report - {{ report_date }} - {{ app_code }}"
+    email_body: |
+      Hello Team,
+
+      The automated vulnerability scan for application code {{ app_code }} has been completed.
+
+      Summary:
+      - Total vulnerabilities found: {{ total_vulnerabilities }}
+      - Time period: {{ start_date }} to {{ end_date }}
+      - Application code: {{ app_code }}
+      - Environment: {{ vault_environment | upper }}
+
+      {% if high_severity_count > 0 %}
+      ATTENTION: {{ high_severity_count }} high severity vulnerabilities were detected that require immediate action.
+      {% endif %}
+
+      Please review the attached report for detailed information about the vulnerabilities.
+
+      The report includes:
+      - Vulnerability type
+      - Severity level
+      - Affected components
+      - Remediation recommendations
+
+      For results visit https://{{aap_domain}}/#/jobs/playbook/{{awx_job_id}}/output
+
+      For questions or assistance, please contact the Security team.
+
+      This is an automated message from the DevOps Vulnerability Management System.
+
+    email_env_domain: "{{ ansible_domain }}"
+    email_attachments:
+    - "{{ processed_report }}"
+    register: email_result
 
 - name: Log email notification
   debug:
-    msg: "Email notification for vulnerability report sent to {{ to }}"
+    msg: |
+      Email notification details:
+      - Sent to: {{ email_recipient }}
+      - App Code: {{ app_code }}
+      - Environment: {{ vault_environment | upper }}
+      - Total vulnerabilities: {{ total_vulnerabilities }}
+      - High severity count: {{ high_severity_count }}
   when: report_stat.stat.exists and email_stat.stat.exists
