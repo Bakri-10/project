@@ -5,7 +5,7 @@ import sys
 import json
 import smtplib
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
@@ -82,13 +82,19 @@ def generate_report(input_file, output_file):
     # Analyze the data
     analysis = analyze_vulnerabilities(hits)
     
+    # Get date range (last 7 days by default)
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=7)
+    
     # Create report content
     report = {
         "summary": {
             "total_vulnerabilities": total,
             "high_severity_count": analysis["high_severity_count"],
             "app_codes": analysis["app_codes"],
-            "generated_at": datetime.now().isoformat(),
+            "generated_at": datetime.now().strftime("%Y-%m-%d"),
+            "start_date": start_date.strftime("%Y-%m-%d"),
+            "end_date": end_date.strftime("%Y-%m-%d")
         },
         "severity_breakdown": analysis["severity_counts"],
         "vulnerability_types": analysis["vulnerability_types"],
@@ -117,10 +123,12 @@ def prepare_email_content(template_file, report_data):
             data = json.load(f)
         
         # Extract data for template
-        report_date = datetime.now().strftime("%Y-%m-%d")
+        report_date = data["summary"]["generated_at"]
         app_code = ",".join(data["summary"]["app_codes"]) if data["summary"]["app_codes"] else "Unknown"
         total_vulnerabilities = data["summary"]["total_vulnerabilities"]
         high_severity_count = data["summary"]["high_severity_count"]
+        start_date = data["summary"]["start_date"]
+        end_date = data["summary"]["end_date"]
         
         # Replace placeholders in template
         content = template
@@ -128,6 +136,8 @@ def prepare_email_content(template_file, report_data):
         content = content.replace("{{ app_code }}", app_code)
         content = content.replace("{{ total_vulnerabilities }}", str(total_vulnerabilities))
         content = content.replace("{{ high_severity_count }}", str(high_severity_count))
+        content = content.replace("{{ start_date }}", start_date)
+        content = content.replace("{{ end_date }}", end_date)
         
         # Handle conditional sections
         if high_severity_count > 0:
