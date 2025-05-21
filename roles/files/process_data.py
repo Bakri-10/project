@@ -30,11 +30,11 @@ def load_vulnerability_data(file_path):
         
         return hits, total
     except Exception as e:
-        print(f"ERROR: Failed to load vulnerability data: {str(e)}")
+        print(f"ERROR: Failed to load data from file: {str(e)}")
         return [], 0
 
-def analyze_vulnerabilities(hits):
-    """Analyze vulnerability data and extract useful metrics"""
+def analyze_issues(hits):
+    """Analyze issue data and extract useful metrics"""
     severity_counts = {
         "critical": 0,
         "high": 0,
@@ -44,7 +44,7 @@ def analyze_vulnerabilities(hits):
     }
     
     app_codes = set()
-    vulnerability_types = set()
+    issue_types = set()
     
     for hit in hits:
         source = hit.get('_source', {})
@@ -59,28 +59,28 @@ def analyze_vulnerabilities(hits):
         if app_code:
             app_codes.add(app_code)
         
-        # Collect unique vulnerability types
-        vuln_type = source.get('vulnerabilityType')
-        if vuln_type:
-            vulnerability_types.add(vuln_type)
+        # Collect unique issue types
+        issue_type = source.get('issueType')
+        if issue_type:
+            issue_types.add(issue_type)
     
     return {
         "severity_counts": severity_counts,
         "app_codes": list(app_codes),
-        "vulnerability_types": list(vulnerability_types),
+        "issue_types": list(issue_types),
         "high_severity_count": severity_counts["critical"] + severity_counts["high"]
     }
 
 def generate_report(input_file, output_file):
-    """Generate a formatted report from vulnerability data"""
+    """Generate a formatted report from data"""
     hits, total = load_vulnerability_data(input_file)
     
     if total == 0:
-        print("No vulnerabilities found.")
+        print("No issues found.")
         return False
     
     # Analyze the data
-    analysis = analyze_vulnerabilities(hits)
+    analysis = analyze_issues(hits)
     
     # Get date range (last 7 days by default)
     end_date = datetime.now()
@@ -92,13 +92,14 @@ def generate_report(input_file, output_file):
             "total_vulnerabilities": total,
             "high_severity_count": analysis["high_severity_count"],
             "app_codes": analysis["app_codes"],
+            "issue_types": analysis["issue_types"],
             "generated_at": datetime.now().strftime("%Y-%m-%d"),
             "start_date": start_date.strftime("%Y-%m-%d"),
             "end_date": end_date.strftime("%Y-%m-%d")
         },
         "severity_breakdown": analysis["severity_counts"],
-        "vulnerability_types": analysis["vulnerability_types"],
-        "raw_data": hits[:10]  # Include first 10 vulnerabilities as examples
+        "issue_types": analysis["issue_types"],
+        "raw_data": hits[:10]  # Include first 10 issues as examples
     }
     
     # Write report to file
@@ -130,6 +131,9 @@ def prepare_email_content(template_file, report_data):
         start_date = data["summary"]["start_date"]
         end_date = data["summary"]["end_date"]
         
+        # Get issue types if available
+        issue_types = ", ".join(data["summary"]["issue_types"]) if "issue_types" in data["summary"] else "Vulnerability"
+        
         # Replace placeholders in template
         content = template
         content = content.replace("{{ report_date }}", report_date)
@@ -138,6 +142,7 @@ def prepare_email_content(template_file, report_data):
         content = content.replace("{{ high_severity_count }}", str(high_severity_count))
         content = content.replace("{{ start_date }}", start_date)
         content = content.replace("{{ end_date }}", end_date)
+        content = content.replace("{{ issue_types }}", issue_types)
         
         # Handle conditional sections
         if high_severity_count > 0:
@@ -156,9 +161,9 @@ def prepare_email_content(template_file, report_data):
         return None
 
 def main():
-    """Main function to process vulnerability data"""
-    parser = argparse.ArgumentParser(description='Process vulnerability data from Elasticsearch')
-    parser.add_argument('--input', required=True, help='Input JSON file with vulnerability data')
+    """Main function to process data"""
+    parser = argparse.ArgumentParser(description='Process data from Elasticsearch')
+    parser.add_argument('--input', required=True, help='Input JSON file with data')
     parser.add_argument('--output', required=True, help='Output file for the processed report')
     parser.add_argument('--email-template', help='Email template file for notifications')
     parser.add_argument('--email-output', help='Output file for the email content')
