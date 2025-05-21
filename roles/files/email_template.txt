@@ -1,22 +1,22 @@
-Subject: Vulnerability Report - {{ report_date }}
+Subject: {{ issue_types }} Report - {{ report_date }}
 
 Hello Team,
 
-The automated vulnerability scan for application code {{ app_code }} has been completed.
+The automated {{ issue_types }} scan for application code {{ app_code }} has been completed.
 
 Summary:
-- Total vulnerabilities found: {{ total_vulnerabilities }}
+- Total {{ issue_types }} found: {{ total_vulnerabilities }}
 - Time period: {{ start_date }} to {{ end_date }}
 - Application code: {{ app_code }}
 
 {% if high_severity_count > 0 %}
-ATTENTION: {{ high_severity_count }} high severity vulnerabilities were detected that require immediate action.
+ATTENTION: {{ high_severity_count }} high severity issues were detected that require immediate action.
 {% endif %}
 
-Please review the attached report for detailed information about the vulnerabilities.
+Please review the attached report for detailed information about the {{ issue_types }} issues.
 
 The report includes:
-- Vulnerability type
+- Issue type: {{ issue_types }}
 - Severity level
 - Affected components
 - Remediation recommendations
