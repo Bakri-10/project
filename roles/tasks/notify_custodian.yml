@@ -1,4 +1,8 @@
 ---
+# Ansible playbook to send notification emails to custodians about vulnerabilities
+# This playbook sends emails using the processed report data
+
+# Ensure required variables are defined
 - name: Verify required variables
   ansible.builtin.assert:
     that:
@@ -18,6 +22,7 @@
     email_template: "{{ role_path }}/files/email_template.txt"
     app_code: "{{ survey_appcode | upper }}"
     vault_environment: "{{ vault_env | default('DEV') }}"
+    current_issue_type: "{{ issue_type | default('Vulnerability') }}"
 
 # Ensure output directory exists
 - name: Ensure output directory exists
@@ -78,26 +83,26 @@
     appcode: "{{ app_code }}"
     email_to: "{{ email_recipient }}"
     email_cc: []
-    email_subject: "Vulnerability Report - {{ report_date }} - {{ app_code }}"
+    email_subject: "{{ current_issue_type }} Report - {{ report_date }} - {{ app_code }}"
     email_body: |
       Hello Team,
 
-      The automated vulnerability scan for application code {{ app_code }} has been completed.
+      The automated {{ current_issue_type }} scan for application code {{ app_code }} has been completed.
 
       Summary:
-      - Total vulnerabilities found: {{ total_vulnerabilities }}
+      - Total {{ current_issue_type }} found: {{ total_vulnerabilities }}
       - Time period: {{ start_date }} to {{ end_date }}
       - Application code: {{ app_code }}
       - Environment: {{ vault_environment | upper }}
 
       {% if high_severity_count > 0 %}
-      ATTENTION: {{ high_severity_count }} high severity vulnerabilities were detected that require immediate action.
+      ATTENTION: {{ high_severity_count }} high severity issues were detected that require immediate action.
       {% endif %}
 
-      Please review the attached report for detailed information about the vulnerabilities.
+      Please review the attached report for detailed information about the {{ current_issue_type }} issues.
 
       The report includes:
-      - Vulnerability type
+      - Issue type: {{ current_issue_type }}
       - Severity level
       - Affected components
       - Remediation recommendations
@@ -120,6 +125,7 @@
       - Sent to: {{ email_recipient }}
       - App Code: {{ app_code }}
       - Environment: {{ vault_environment | upper }}
-      - Total vulnerabilities: {{ total_vulnerabilities }}
+      - Total issues: {{ total_vulnerabilities }}
       - High severity count: {{ high_severity_count }}
+      - Issue Type: {{ current_issue_type }}
   when: report_stat.stat.exists and email_stat.stat.exists
