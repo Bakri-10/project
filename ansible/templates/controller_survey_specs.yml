@@ -3,13 +3,23 @@ app_controller_survey_specs:
     name: "{{ .Values.HELIOS_APP_CODE }}_{{ .Values.HELIOS_APP_NAME }}"
     description: "App code associated with vault"
     spec:
-      - question_name: "Enter appcode"
-        question_description: "Enter appcode"
-        required: true ##prompt the user to input
-        type: "text"
-        variable: "survey_appcode"
-        min: 0
-        max: 4
-        default: ""
-        choices: ""
-        new_question: true 
+    - question_name: "Enter appcode"
+      question_description: "Enter appcode"
+      required: true ##prompt the user to input
+      type: "text"
+      variable: "survey_appcode"
+      min: 0
+      max: 4
+      default: ""
+      choices: ""
+      new_question: true
+    - question_name: "Enter issue type"
+      question_description: "Enter issue type (default: Vulnerability)"
+      required: false
+      type: "text"
+      variable: "survey_issue_type"
+      min: 0
+      max: 30
+      default: "Vulnerability"
+      choices: ""
+      new_question: true
