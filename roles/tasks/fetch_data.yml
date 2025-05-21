@@ -1,5 +1,4 @@
 ---
-
 - name: Run fetch_data.py to query Elasticsearch
   command: python3 {{ role_path }}/files/fetch_data.py
   environment:
@@ -11,6 +10,7 @@
     OUTPUT_FILE: "{{ raw_data_file }}"
     ES_USERNAME: "{{ es_service_id | default('') }}"
     ES_PASSWORD: "{{ es_service_id_password | default('') }}"
+    ISSUE_TYPE: "{{ issue_type | default('Vulnerability') }}"
   register: fetch_output
   changed_when: false
   failed_when: fetch_output.rc != 0
