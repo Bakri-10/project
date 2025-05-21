@@ -27,6 +27,7 @@ def query_elasticsearch():
     app_codes = get_env_var("APP_CODES", "").split(",")
     start_date = get_env_var("START_DATE", "")
     end_date = get_env_var("END_DATE", "")
+    issue_type = get_env_var("ISSUE_TYPE", "Vulnerability")  # Default to Vulnerability if not specified
     
     # Get authentication if provided
     username = get_env_var("ES_USERNAME", "")
@@ -43,7 +44,7 @@ def query_elasticsearch():
         "query": {
             "bool": {
                 "must": [
-                    {"term": {"issueType.keyword": "Vulnerability"}}
+                    {"term": {"issueType.keyword": issue_type}}
                 ]
             }
         }
