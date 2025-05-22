@@ -10,7 +10,6 @@
     - vault_env is defined
     fail_msg: "Missing required variables. Please ensure all required variables are defined"
 
-# Define file paths and environment variables
 - name: Set file path and environment variables
   set_fact:
     processed_report: "{{ output_dir }}/vulnerability_report_processed.json"
@@ -20,7 +19,6 @@
     vault_environment: "{{ vault_env }}"
     current_issue_type: "{{ issue_type }}"
 
-# Ensure output directory exists
 - name: Ensure output directory exists
   file:
     path: "{{ output_dir }}"
@@ -60,18 +58,6 @@
     - "Issue type queried: {{ issue_type }}"
   when: report_stat.stat.exists
 
-- name: Set report variables for email
-  set_fact:
-    report_json: "{{ report_data.content | b64decode | from_json }}"
-    email_body: "{{ email_content.content | b64decode }}"
-    report_date: "{{ ansible_date_time.date }}"
-    total_vulnerabilities: "{{ report_json.summary.total_vulnerabilities | int }}"
-    start_date: "{{ report_json.summary.start_date }}"
-    end_date: "{{ report_json.summary.end_date }}"
-    high_severity_count: "{{ report_json.summary.high_severity_count | int }}"
-  when: report_stat.stat.exists and email_stat.stat.exists
-
-# Get email recipient from vault with fallback
 - name: Get email recipient from vault
   block:
   - name: Try vault lookup
@@ -88,10 +74,10 @@
   debug:
     msg: |
       Report Values:
-      - report_json.summary: {{ report_json.summary }}
-      - report_json.summary.issue_types: {{ report_json.summary.issue_types }}
+      - report summary: {{ (report_data.content | b64decode | from_json).summary }}
+      - issue types: {{ (report_data.content | b64decode | from_json).summary.issue_types }}
       - current_issue_type: {{ current_issue_type }}
-      - email_body excerpt: {{ email_body | truncate(100) }}
+      - email_body excerpt: {{ email_content.content | b64decode | truncate(100) }}
   when: report_stat.stat.exists and email_stat.stat.exists
 
 - name: Send vulnerability report notification
@@ -101,13 +87,19 @@
     appcode: "{{ app_code }}"
     email_to: "{{ email_recipient }}"
     email_cc: []
-    email_subject: "Issue Report - {{ report_date }} - {{ app_code }}"
-    issue_types: "{{ report_json.summary.issue_types | join(', ') }}"
-    email_body: "{{ email_body }}"
+    email_subject: "Issue Report - {{ ansible_date_time.date }} - {{ app_code }}"
+    issue_types: "{{ (report_data.content | b64decode | from_json).summary.issue_types | join(', ') }}"
+    email_body: "{{ email_content.content | b64decode }}"
     email_env_domain: "{{ ansible_domain }}"
+    total_vulnerabilities: "{{ (report_data.content | b64decode | from_json).summary.total_vulnerabilities | int }}"
+    start_date: "{{ (report_data.content | b64decode | from_json).summary.start_date }}"
+    end_date: "{{ (report_data.content | b64decode | from_json).summary.end_date }}"
+    high_severity_count: "{{ (report_data.content | b64decode | from_json).summary.high_severity_count | int }}"
+    report_date: "{{ ansible_date_time.date }}"
     email_attachments:
     - "{{ processed_report }}"
-    register: email_result
+  when: report_stat.stat.exists and email_stat.stat.exists
+  register: email_result
 
 - name: Log email notification
   debug:
@@ -116,8 +108,8 @@
       - Sent to: {{ email_recipient }}
       - App Code: {{ app_code }}
       - Environment: {{ vault_environment | upper }}
-      - Total issues: {{ total_vulnerabilities }}
-      - High severity count: {{ high_severity_count }}
+      - Total issues: {{ (report_data.content | b64decode | from_json).summary.total_vulnerabilities | int }}
+      - High severity count: {{ (report_data.content | b64decode | from_json).summary.high_severity_count | int }}
       - Issue Type: {{ current_issue_type }}
-      - Actual issue types from report: {{ report_json.summary.issue_types | join(', ') }}
+      - Actual issue types from report: {{ (report_data.content | b64decode | from_json).summary.issue_types | join(', ') }}
   when: report_stat.stat.exists and email_stat.stat.exists
