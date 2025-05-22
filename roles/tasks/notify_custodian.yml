@@ -84,6 +84,7 @@
     email_to: "{{ email_recipient }}"
     email_cc: []
     email_subject: "{{ current_issue_type }} Report - {{ report_date }} - {{ app_code }}"
+    issue_types: "{{ current_issue_type }}"
     email_body: |
       Hello Team,
 
@@ -102,7 +103,7 @@
       Please review the attached report for detailed information about the {{ current_issue_type }} issues.
 
       The report includes:
-      - Issue type: {{ current_issue_type }}
+      - Issue type: {{ (report_json.summary.issue_types | join(', ')) if report_json.summary.issue_types is defined and report_json.summary.issue_types | length > 0 else current_issue_type }}
       - Severity level
       - Affected components
       - Remediation recommendations
