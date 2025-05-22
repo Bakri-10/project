@@ -17,7 +17,6 @@
     email_template: "{{ role_path }}/files/email_template.txt"
     app_code: "{{ survey_appcode | upper }}"
     vault_environment: "{{ vault_env }}"
-    current_issue_type: "{{ issue_type }}"
 
 - name: Ensure output directory exists
   file:
@@ -54,8 +53,15 @@
     - "Total results: {{ (report_data.content | b64decode | from_json).summary.total_vulnerabilities }}"
     - "High severity issues: {{ (report_data.content | b64decode | from_json).summary.high_severity_count }}"
     - "Application codes: {{ (report_data.content | b64decode | from_json).summary.app_codes | join(', ') }}"
-    - "Issue types found: {{ (report_data.content | b64decode | from_json).summary.issue_types | join(', ') }}"
-    - "Issue type queried: {{ issue_type }}"
+    - "Issue types: {{ (report_data.content | b64decode | from_json).summary.issue_types | join(', ') }}"
+    - "Generated at: {{ (report_data.content | b64decode | from_json).summary.generated_at }}"
+    - "Date range: {{ (report_data.content | b64decode | from_json).summary.start_date }} to {{ (report_data.content | b64decode | from_json).summary.end_date }}"
+    - "Severity breakdown:"
+    - "  Critical: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.critical }}"
+    - "  High: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.high }}"
+    - "  Medium: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.medium }}"
+    - "  Low: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.low }}"
+    - "  Info: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.info }}"
   when: report_stat.stat.exists
 
 - name: Get email recipient from vault
@@ -76,7 +82,6 @@
       Report Values:
       - report summary: {{ (report_data.content | b64decode | from_json).summary }}
       - issue types: {{ (report_data.content | b64decode | from_json).summary.issue_types }}
-      - current_issue_type: {{ current_issue_type }}
       - email_body excerpt: {{ email_content.content | b64decode | truncate(100) }}
   when: report_stat.stat.exists and email_stat.stat.exists
 
@@ -95,6 +100,11 @@
     start_date: "{{ (report_data.content | b64decode | from_json).summary.start_date }}"
     end_date: "{{ (report_data.content | b64decode | from_json).summary.end_date }}"
     high_severity_count: "{{ (report_data.content | b64decode | from_json).summary.high_severity_count | int }}"
+    critical_count: "{{ (report_data.content | b64decode | from_json).summary.severity_breakdown.critical | int }}"
+    medium_count: "{{ (report_data.content | b64decode | from_json).summary.severity_breakdown.medium | int }}"
+    low_count: "{{ (report_data.content | b64decode | from_json).summary.severity_breakdown.low | int }}"
+    info_count: "{{ (report_data.content | b64decode | from_json).summary.severity_breakdown.info | int }}"
+    generated_at: "{{ (report_data.content | b64decode | from_json).summary.generated_at }}"
     report_date: "{{ ansible_date_time.date }}"
     email_attachments:
     - "{{ processed_report }}"
@@ -109,7 +119,13 @@
       - App Code: {{ app_code }}
       - Environment: {{ vault_environment | upper }}
       - Total issues: {{ (report_data.content | b64decode | from_json).summary.total_vulnerabilities | int }}
-      - High severity count: {{ (report_data.content | b64decode | from_json).summary.high_severity_count | int }}
-      - Issue Type: {{ current_issue_type }}
-      - Actual issue types from report: {{ (report_data.content | b64decode | from_json).summary.issue_types | join(', ') }}
+      - Generated at: {{ (report_data.content | b64decode | from_json).summary.generated_at }}
+      - Date range: {{ (report_data.content | b64decode | from_json).summary.start_date }} to {{ (report_data.content | b64decode | from_json).summary.end_date }}
+      - Severity breakdown:
+        - Critical: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.critical }}
+        - High: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.high }}
+        - Medium: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.medium }}
+        - Low: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.low }}
+        - Info: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.info }}
+      - Issue types: {{ (report_data.content | b64decode | from_json).summary.issue_types | join(', ') }}
   when: report_stat.stat.exists and email_stat.stat.exists
