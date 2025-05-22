@@ -1,8 +1,4 @@
 ---
-# Ansible playbook to send notification emails to custodians about vulnerabilities
-# This playbook sends emails using the processed report data
-
-# Ensure required variables are defined
 - name: Verify required variables
   ansible.builtin.assert:
     that:
@@ -21,8 +17,8 @@
     email_content_file: "{{ output_dir }}/email_content.txt"
     email_template: "{{ role_path }}/files/email_template.txt"
     app_code: "{{ survey_appcode | upper }}"
-    vault_environment: "{{ vault_env | default('DEV') }}"
-    current_issue_type: "{{ issue_type | default('Vulnerability') }}"
+    vault_environment: "{{ vault_env }}"
+    current_issue_type: "{{ issue_type }}"
 
 # Ensure output directory exists
 - name: Ensure output directory exists
@@ -53,15 +49,26 @@
   register: report_data
   when: report_stat.stat.exists
 
+- name: Display direct report summary (like in process_data.yml)
+  debug:
+    msg:
+    - "Report Summary (Direct Access):"
+    - "Total results: {{ (report_data.content | b64decode | from_json).summary.total_vulnerabilities }}"
+    - "High severity issues: {{ (report_data.content | b64decode | from_json).summary.high_severity_count }}"
+    - "Application codes: {{ (report_data.content | b64decode | from_json).summary.app_codes | join(', ') }}"
+    - "Issue types found: {{ (report_data.content | b64decode | from_json).summary.issue_types | join(', ') }}"
+    - "Issue type queried: {{ issue_type }}"
+  when: report_stat.stat.exists
+
 - name: Set report variables for email
   set_fact:
     report_json: "{{ report_data.content | b64decode | from_json }}"
     email_body: "{{ email_content.content | b64decode }}"
     report_date: "{{ ansible_date_time.date }}"
-    total_vulnerabilities: "{{ report_json.summary.total_vulnerabilities | default(0, true) | int }}"
-    start_date: "{{ report_json.summary.start_date | default(ansible_date_time.date) }}"
-    end_date: "{{ report_json.summary.end_date | default(ansible_date_time.date) }}"
-    high_severity_count: "{{ report_json.summary.high_severity_count | default(0, true) | int }}"
+    total_vulnerabilities: "{{ report_json.summary.total_vulnerabilities | int }}"
+    start_date: "{{ report_json.summary.start_date }}"
+    end_date: "{{ report_json.summary.end_date }}"
+    high_severity_count: "{{ report_json.summary.high_severity_count | int }}"
   when: report_stat.stat.exists and email_stat.stat.exists
 
 # Get email recipient from vault with fallback
@@ -76,6 +83,17 @@
     set_fact:
       email_recipient: "{{ to }}"
 
+# Debug output to show what's in the report
+- name: Debug report values
+  debug:
+    msg: |
+      Report Values:
+      - report_json.summary: {{ report_json.summary }}
+      - report_json.summary.issue_types: {{ report_json.summary.issue_types }}
+      - current_issue_type: {{ current_issue_type }}
+      - email_body excerpt: {{ email_body | truncate(100) }}
+  when: report_stat.stat.exists and email_stat.stat.exists
+
 - name: Send vulnerability report notification
   ansible.builtin.include_role:
     name: rbc_sfmo.components.email
@@ -83,37 +101,9 @@
     appcode: "{{ app_code }}"
     email_to: "{{ email_recipient }}"
     email_cc: []
-    email_subject: "{{ current_issue_type }} Report - {{ report_date }} - {{ app_code }}"
-    issue_types: "{{ current_issue_type }}"
-    email_body: |
-      Hello Team,
-
-      The automated {{ current_issue_type }} scan for application code {{ app_code }} has been completed.
-
-      Summary:
-      - Total {{ current_issue_type }} found: {{ total_vulnerabilities }}
-      - Time period: {{ start_date }} to {{ end_date }}
-      - Application code: {{ app_code }}
-      - Environment: {{ vault_environment | upper }}
-
-      {% if high_severity_count > 0 %}
-      ATTENTION: {{ high_severity_count }} high severity issues were detected that require immediate action.
-      {% endif %}
-
-      Please review the attached report for detailed information about the {{ current_issue_type }} issues.
-
-      The report includes:
-      - Issue type: {{ (report_json.summary.issue_types | join(', ')) if report_json.summary.issue_types is defined and report_json.summary.issue_types | length > 0 else current_issue_type }}
-      - Severity level
-      - Affected components
-      - Remediation recommendations
-
-      For results visit https://{{aap_domain}}/#/jobs/playbook/{{awx_job_id}}/output
-
-      For questions or assistance, please contact the Security team.
-
-      This is an automated message from the DevOps Vulnerability Management System.
-
+    email_subject: "Issue Report - {{ report_date }} - {{ app_code }}"
+    issue_types: "{{ report_json.summary.issue_types | join(', ') }}"
+    email_body: "{{ email_body }}"
     email_env_domain: "{{ ansible_domain }}"
     email_attachments:
     - "{{ processed_report }}"
@@ -129,4 +119,5 @@
       - Total issues: {{ total_vulnerabilities }}
       - High severity count: {{ high_severity_count }}
       - Issue Type: {{ current_issue_type }}
+      - Actual issue types from report: {{ report_json.summary.issue_types | join(', ') }}
   when: report_stat.stat.exists and email_stat.stat.exists
