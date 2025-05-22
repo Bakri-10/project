@@ -27,7 +27,8 @@ def query_elasticsearch():
     app_codes = get_env_var("APP_CODES", "").split(",")
     start_date = get_env_var("START_DATE", "")
     end_date = get_env_var("END_DATE", "")
-    issue_type = get_env_var("ISSUE_TYPE", "Vulnerability")  # Default to Vulnerability if not specified
+    issue_type_str = get_env_var("ISSUE_TYPE", "Vulnerability")  # Default to Vulnerability if not specified
+    issue_types = [it.strip() for it in issue_type_str.split(',') if it.strip()] # Split and remove empty strings
     
     # Get authentication if provided
     username = get_env_var("ES_USERNAME", "")
@@ -44,11 +45,19 @@ def query_elasticsearch():
         "query": {
             "bool": {
                 "must": [
-                    {"term": {"issueType.keyword": issue_type}}
+                    
                 ]
             }
         }
     }
+
+    # Add issue type filter
+    if len(issue_types) == 1:
+        query["query"]["bool"]["must"].append({"term": {"issueType.keyword": issue_types[0]}})
+    elif len(issue_types) > 1:
+        query["query"]["bool"]["must"].append({"terms": {"issueType.keyword": issue_types}})
+    else: # Fallback or if empty after stripping
+        query["query"]["bool"]["must"].append({"term": {"issueType.keyword": "Vulnerability"}})
     
     # Add app codes filter if provided
     if app_codes and app_codes[0]:
