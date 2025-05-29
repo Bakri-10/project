@@ -24,9 +24,10 @@ def query_elasticsearch():
     # Get environment variables
     es_host = get_env_var("ES_HOST", required=True)
     es_index = get_env_var("ES_INDEX", required=True)
-    start_date = get_env_var("START_DATE", required=True)
-    end_date = get_env_var("END_DATE", required=True)
+    start_date = get_env_var("START_DATE", "")
+    end_date = get_env_var("END_DATE", "")
     
+    # Debug date range
     print(f"Using date range: {start_date} to {end_date}")
     
     # Get authentication if provided
@@ -38,6 +39,7 @@ def query_elasticsearch():
     
     # Build the search URL
     search_url = f"{es_host}/{es_index}/_search"
+    print(f"Using Elasticsearch URL: {search_url}")
     
     # Prepare the query to get high severity issues for all issue types
     query = {
@@ -48,15 +50,6 @@ def query_elasticsearch():
                     {
                         "terms": {
                             "severity.keyword": ["critical", "high"]
-                        }
-                    },
-                    {
-                        "range": {
-                            "@timestamp": {
-                                "gte": start_date,
-                                "lte": end_date,
-                                "format": "strict_date_optional_time"
-                            }
                         }
                     }
                 ]
@@ -86,16 +79,30 @@ def query_elasticsearch():
         }
     }
     
+    # Add date range filter if both start and end dates are provided
+    if start_date and end_date:
+        date_range = {
+            "range": {
+                "timestamp": {
+                    "gte": start_date,
+                    "lte": end_date
+                }
+            }
+        }
+        query["query"]["bool"]["must"].append(date_range)
+        print(f"Added date range filter: {json.dumps(date_range, indent=2)}")
+    
     # Set headers
     headers = {
         "Content-Type": "application/json"
     }
     
+    # Debug query
+    print(f"Using query: {json.dumps(query, indent=2)}")
+    
     try:
-        print(f"Sending query to {search_url}")
-        print(f"Query: {json.dumps(query, indent=2)}")
-        
         # Send the request
+        print("Sending request to Elasticsearch...")
         response = requests.post(
             search_url,
             headers=headers,
@@ -107,6 +114,7 @@ def query_elasticsearch():
         # Check response
         if response.status_code == 200:
             result = response.json()
+            print(f"Got successful response from Elasticsearch")
             
             # Process aggregations to get app codes with high severity issues and their issue types
             app_codes_with_issues = []
@@ -146,11 +154,10 @@ def query_elasticsearch():
                 print(f"Issue types: {', '.join(sorted(all_issue_types))}")
                 
                 # Print sample of the data
-                if result.get("hits", {}).get("hits"):
-                    print("\nSample of issues found:")
-                    for hit in result["hits"]["hits"][:3]:
-                        source = hit["_source"]
-                        print(f"- {source.get('issueType', 'Unknown')} ({source.get('severity', 'Unknown')}) in {source.get('appCode', 'Unknown')}")
+                hits = result.get("hits", {}).get("hits", [])
+                if hits:
+                    print("\nSample of first result:")
+                    print(json.dumps(hits[0], indent=2))
             else:
                 hits = result.get("hits", {}).get("hits", [])
                 total = result.get("hits", {}).get("total", {}).get("value", 0)
