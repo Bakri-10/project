@@ -2,19 +2,31 @@
 # Ansible playbook to fetch vulnerability data from Elasticsearch
 # This playbook executes a Python script to query Elasticsearch and process the results
 
+- name: Set date range for last 7 days
+  set_fact:
+    end_date: "{{ ansible_date_time.iso8601 }}"
+    start_date: "{{ (ansible_date_time.epoch | int - (7 * 24 * 3600)) | timestamp_to_iso8601 }}"
+
 - name: Run fetch_data.py to query Elasticsearch
   command: python3 {{ role_path }}/files/fetch_data.py
   environment:
     ES_HOST: "{{ es_url }}"
     ES_INDEX: "{{ server_compliance_metrics_index }}"
-    START_DATE: "{{ lookup('env', 'START_DATE') | default('2024-05-16T00:00:00Z', true) }}"
-    END_DATE: "{{ lookup('env', 'END_DATE') | default('2025-05-16T23:59:59Z', true) }}"
+    START_DATE: "{{ start_date }}"
+    END_DATE: "{{ end_date }}"
     OUTPUT_FILE: "{{ raw_data_file }}"
     ES_USERNAME: "{{ es_service_id | default('') }}"
     ES_PASSWORD: "{{ es_service_id_password | default('') }}"
   register: fetch_output
   changed_when: false
   failed_when: fetch_output.rc != 0
+
+- name: Debug date range
+  debug:
+    msg:
+    - "Fetching data for date range:"
+    - "Start Date: {{ start_date }}"
+    - "End Date: {{ end_date }}"
 
 - name: Debug fetch output
   debug:
@@ -41,5 +53,7 @@
 
 - name: Display summary
   debug:
-    msg: "Found {{ total_vulnerabilities }} issues across all app codes"
+    msg:
+    - "Found {{ total_vulnerabilities }} issues across all app codes"
+    - "Time period: {{ start_date }} to {{ end_date }}"
   when: output_file_stat.stat.exists and total_vulnerabilities is defined
