@@ -26,8 +26,6 @@ def query_elasticsearch():
     es_index = get_env_var("ES_INDEX", required=True)
     start_date = get_env_var("START_DATE", "")
     end_date = get_env_var("END_DATE", "")
-    issue_type_str = get_env_var("ISSUE_TYPE", "Vulnerability")
-    issue_types = [it.strip() for it in issue_type_str.split(',') if it.strip()]
     
     # Get authentication if provided
     username = get_env_var("ES_USERNAME", "")
@@ -39,7 +37,7 @@ def query_elasticsearch():
     # Build the search URL
     search_url = f"{es_host}/{es_index}/_search"
     
-    # Prepare the query to get high severity issues
+    # Prepare the query to get high severity issues for all issue types
     query = {
         "size": 10000,  # Increased size limit to get more results
         "query": {
@@ -57,17 +55,25 @@ def query_elasticsearch():
             "by_app_code": {
                 "terms": {
                     "field": "appCode.keyword",
-                    "size": 10000  # Also increase aggregation size limit
+                    "size": 10000
+                },
+                "aggs": {
+                    "issue_types": {
+                        "terms": {
+                            "field": "issueType.keyword",
+                            "size": 1000
+                        }
+                    }
+                }
+            },
+            "all_issue_types": {
+                "terms": {
+                    "field": "issueType.keyword",
+                    "size": 1000
                 }
             }
         }
     }
-
-    # Add issue type filter
-    if len(issue_types) == 1:
-        query["query"]["bool"]["must"].append({"term": {"issueType.keyword": issue_types[0]}})
-    elif len(issue_types) > 1:
-        query["query"]["bool"]["must"].append({"terms": {"issueType.keyword": issue_types}})
     
     # Add date range filter if both start and end dates are provided
     if start_date and end_date:
@@ -101,12 +107,32 @@ def query_elasticsearch():
         if response.status_code == 200:
             result = response.json()
             
-            # Process aggregations to get app codes with high severity issues
+            # Process aggregations to get app codes with high severity issues and their issue types
             app_codes_with_issues = []
-            if "aggregations" in result and "by_app_code" in result["aggregations"]:
-                for bucket in result["aggregations"]["by_app_code"]["buckets"]:
-                    if bucket["doc_count"] > 0:
-                        app_codes_with_issues.append(bucket["key"])
+            all_issue_types = set()
+            
+            if "aggregations" in result:
+                # Get all issue types
+                if "all_issue_types" in result["aggregations"]:
+                    for bucket in result["aggregations"]["all_issue_types"]["buckets"]:
+                        all_issue_types.add(bucket["key"])
+                
+                # Get app codes and their specific issue types
+                if "by_app_code" in result["aggregations"]:
+                    for app_bucket in result["aggregations"]["by_app_code"]["buckets"]:
+                        if app_bucket["doc_count"] > 0:
+                            app_code = app_bucket["key"]
+                            app_issue_types = []
+                            
+                            if "issue_types" in app_bucket:
+                                for type_bucket in app_bucket["issue_types"]["buckets"]:
+                                    app_issue_types.append(type_bucket["key"])
+                            
+                            app_codes_with_issues.append({
+                                "app_code": app_code,
+                                "issue_types": app_issue_types,
+                                "count": app_bucket["doc_count"]
+                            })
             
             # Save result to file if output path is provided
             output_file = get_env_var("OUTPUT_FILE", "")
@@ -115,6 +141,8 @@ def query_elasticsearch():
                     json.dump(result, f, indent=2)
                 print(f"Query results saved to {output_file}")
                 print(f"Found {len(app_codes_with_issues)} app codes with high severity issues")
+                print(f"Total issue types found: {len(all_issue_types)}")
+                print(f"Issue types: {', '.join(sorted(all_issue_types))}")
             else:
                 hits = result.get("hits", {}).get("hits", [])
                 total = result.get("hits", {}).get("total", {}).get("value", 0)

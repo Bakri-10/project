@@ -43,7 +43,7 @@ def analyze_issues(hits):
         "info": 0,
     }
     
-    app_codes = set()
+    app_codes = {}  # Dictionary to store app code details
     issue_types = set()
     high_severity_issues = []
     
@@ -55,15 +55,30 @@ def analyze_issues(hits):
         if severity in severity_counts:
             severity_counts[severity] += 1
         
-        # Collect unique app codes
+        # Collect app code information
         app_code = source.get('appCode')
         if app_code:
-            app_codes.add(app_code)
-        
-        # Collect unique issue types
-        issue_type = source.get('issueType')
-        if issue_type:
-            issue_types.add(issue_type)
+            if app_code not in app_codes:
+                app_codes[app_code] = {
+                    'issue_types': set(),
+                    'severity_counts': {
+                        "critical": 0,
+                        "high": 0,
+                        "medium": 0,
+                        "low": 0,
+                        "info": 0,
+                    }
+                }
+            
+            # Update app code specific counts
+            if severity in app_codes[app_code]['severity_counts']:
+                app_codes[app_code]['severity_counts'][severity] += 1
+            
+            # Add issue type to app code
+            issue_type = source.get('issueType')
+            if issue_type:
+                app_codes[app_code]['issue_types'].add(issue_type)
+                issue_types.add(issue_type)
         
         # Collect high severity issues for the table
         if severity in ['critical', 'high']:
@@ -71,12 +86,23 @@ def analyze_issues(hits):
                 'type': source.get('issueType', 'Unknown'),
                 'severity': severity.upper(),
                 'component': source.get('component', 'Unknown'),
+                'app_code': app_code,
                 'remediation_link': source.get('remediationLink', 'N/A')
             })
     
+    # Convert app_codes dictionary to list format
+    app_codes_list = [
+        {
+            'app_code': code,
+            'issue_types': list(details['issue_types']),
+            'severity_counts': details['severity_counts']
+        }
+        for code, details in app_codes.items()
+    ]
+    
     return {
         "severity_counts": severity_counts,
-        "app_codes": list(app_codes),
+        "app_codes": app_codes_list,
         "issue_types": list(issue_types),
         "high_severity_count": severity_counts["critical"] + severity_counts["high"],
         "high_severity_issues": high_severity_issues
