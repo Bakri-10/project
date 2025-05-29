@@ -1,0 +1,71 @@
+Subject: {{ issue_types }} Report - {{ report_date }}
+
+Hello Team,
+
+The automated {{ issue_types }} scan has been completed for all application codes.
+
+Summary:
+- Total {{ issue_types }} found: {{ total_vulnerabilities }}
+- Time period: {{ start_date }} to {{ end_date }}
+- Application codes scanned: {{ app_code }}
+- Report generated: {{ generated_at }}
+
+Severity breakdown:
+- Critical: {{ critical_count }}
+- High: {{ high_severity_count }}
+- Medium: {{ medium_count }}
+- Low: {{ low_count }}
+- Info: {{ info_count }}
+
+{% if high_severity_count > 0 or critical_count > 0 %}
+ATTENTION: {{ high_severity_count + critical_count }} high/critical severity issues were detected that require immediate action.
+
+High Severity Issues Summary:
+| Issue Type | Severity | Component | App Code | Remediation Link |
+|------------|----------|-----------|----------|------------------|
+{% for issue in high_severity_issues %}
+| {{ issue.type }} | {{ issue.severity }} | {{ issue.component }} | {{ issue.app_code | default('N/A') }} | {{ issue.remediation_link | default('N/A') }} |
+{% endfor %}
+{% endif %}
+
+{% if non_compliant_apps %}
+COMPLIANCE STATUS: NON-COMPLIANT APPLICATIONS DETECTED
+
+The following applications have been marked as non-compliant:
+{% for app in non_compliant_apps %}
+Application Code: {{ app.app_code }}
+Reasons:
+{% for reason in app.reasons %}
+- {{ reason }}
+{% endfor %}
+
+Current Severity Counts:
+- Critical: {{ app.severity_counts.critical }}
+- High: {{ app.severity_counts.high }}
+- Medium: {{ app.severity_counts.medium }}
+- Low: {{ app.severity_counts.low }}
+- Info: {{ app.severity_counts.info }}
+
+{% endfor %}
+
+Compliance Requirements:
+- Critical findings must be 0
+- High severity findings must be 2 or fewer
+- Medium severity findings must be 5 or fewer
+
+Action Required:
+Please address these compliance issues as soon as possible. Applications will be checked again in the next weekly scan.
+{% endif %}
+
+Please review the attached report for detailed information about the {{ issue_types }} issues.
+
+The report includes:
+- Detailed breakdown by severity
+- List of affected components
+- Remediation recommendations
+- Full compliance status for each application
+
+Best regards,
+Security Compliance Team
+
+This is an automated message from the DevOps Vulnerability Management System. 

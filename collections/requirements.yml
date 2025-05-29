@@ -1,0 +1,4 @@
+collections:
+- name: rbc_common.hashicorp_vault
+  version: ">=2.1.1"
+- name: rbc_sfmo.components 

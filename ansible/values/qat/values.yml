@@ -1,0 +1,31 @@
+# QAT environment values for atu0-server-compliance-email-notification
+
+# Environment variables
+VAULT_ENV: "QAT"
+CHORUS_ENV: "QAT"
+ansible_domain: "qat.example.com"
+aap_domain: "aap.qat.example.com"
+
+# Elasticsearch configuration
+es_url: "https://e87a6cd02ed34b0b844d64cc7d8c41a9.ece.saifg.rbc.com:9243"
+server_compliance_metrics_index: "atu0-server-compliance-metrics-qat"
+
+# Email notification settings
+smtp_server: "smtp.qat.rbc.com"
+smtp_port: 25
+email_from: "vulnerability-reports@qat.rbc.com"
+
+# QAT specific settings
+debug_mode: false
+log_level: "INFO"
+notify_custodians: true
+include_qa_team: true
+qa_team_email: "security-qa-team@rbc.com"
+
+# Date range defaults for QAT
+default_start_date_days_ago: 14
+default_end_date_days_ahead: 0
+
+# Test data generators
+generate_test_data: true
+test_vulnerability_count: 20

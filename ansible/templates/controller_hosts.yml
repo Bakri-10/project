@@ -1,0 +1,8 @@
+app_controller_hosts:
+- name: localhost
+  organization: "{{ .Values.HELIOS_APP_CODE }}"
+  inventory: "{{ .Values.HELIOS_APP_CODE }}_{{ .Values.HELIOS_APP_NAME }}"
+  enabled: true
+  variables:
+    ansible_connection: "local"
+    ansible_python_interpreter: "{{ '{{ ansible_playbook_python }}' }}" 

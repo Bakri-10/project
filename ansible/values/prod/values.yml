@@ -1,0 +1,35 @@
+# Production environment values for atu0-server-compliance-email-notification
+
+# Environment variables
+VAULT_ENV: "PROD"
+CHORUS_ENV: "PROD"
+ansible_domain: "example.com"
+aap_domain: "aap.example.com"
+
+# Elasticsearch configuration
+es_url: "https://e87a6cd02ed34b0b844d64cc7d8c41a9.ece.saifg.rbc.com:9243"
+server_compliance_metrics_index: "atu0-server-compliance-metrics"
+
+# Email notification settings
+smtp_server: "smtp.rbc.com"
+smtp_port: 25
+email_from: "vulnerability-reports@rbc.com"
+
+# Production specific settings
+debug_mode: false
+log_level: "ERROR"
+notify_custodians: true
+cc_security_team: true
+security_team_email: "security-team@rbc.com"
+
+# Date range defaults for production
+default_start_date_days_ago: 7
+default_end_date_days_ahead: 0
+
+# Performance and reliability settings
+connection_timeout: 60
+request_timeout: 120
+max_retries: 5
+retry_interval: 30
+max_email_size_kb: 5000
+rate_limit_emails_per_minute: 30

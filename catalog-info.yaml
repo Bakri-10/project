@@ -1,0 +1,18 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: atu0-server-compliance-email-notification
+  description: Automated system for querying Elasticsearch for vulnerability data and sending email notifications
+  annotations:
+    github.com/project-slug: organization/atu0-server-compliance-email-notification
+    backstage.io/techdocs-ref: dir:.
+  tags:
+  - ansible
+  - python
+  - security
+  - elasticsearch
+  - vulnerability
+spec:
+  type: service
+  lifecycle: production
+  owner: security-team

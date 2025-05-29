@@ -1,0 +1,26 @@
+# Development environment values for atu0-server-compliance-email-notification
+
+# Environment variables
+VAULT_ENV: "DEV"
+CHORUS_ENV: "DEV"
+ansible_domain: "dev.example.com"
+aap_domain: "aap.dev.example.com"
+
+# Elasticsearch configuration
+es_url: "https://e87a6cd02ed34b0b844d64cc7d8c41a9.ece.saifg.rbc.com:9243"
+server_compliance_metrics_index: "atu0-server-compliance-metrics-dev"
+
+# Email notification settings
+smtp_server: "smtp.dev.rbc.com"
+smtp_port: 25
+email_from: "vulnerability-reports@dev.rbc.com"
+
+# Development specific settings
+debug_mode: true
+log_level: "DEBUG"
+notify_custodians: false # In dev, send all notifications to the dev team instead
+dev_team_email: "security-dev-team@rbc.com"
+
+# Date range defaults for development
+default_start_date_days_ago: 30
+default_end_date_days_ahead: 0

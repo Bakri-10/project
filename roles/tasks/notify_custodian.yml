@@ -1,0 +1,110 @@
+---
+- name: Verify required variables
+  ansible.builtin.assert:
+    that:
+    - vault_path is defined
+    - raw_data_file is defined
+    - output_dir is defined
+    - role_path is defined
+    - vault_env is defined
+    fail_msg: "Missing required variables. Please ensure all required variables are defined"
+
+- name: Set file path and environment variables
+  set_fact:
+    processed_report: "{{ output_dir }}/vulnerability_report_processed.json"
+    email_content_file: "{{ output_dir }}/email_content.txt"
+    email_template: "{{ role_path }}/files/email_template.txt"
+    vault_environment: "{{ vault_env }}"
+
+- name: Ensure output directory exists
+  file:
+    path: "{{ output_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Check if processed report exists
+  stat:
+    path: "{{ processed_report }}"
+  register: report_stat
+
+- name: Check if email content exists
+  stat:
+    path: "{{ email_content_file }}"
+  register: email_stat
+
+- name: Load email content
+  slurp:
+    src: "{{ email_content_file }}"
+  register: email_content
+  when: email_stat.stat.exists
+
+- name: Load report data for email
+  slurp:
+    src: "{{ processed_report }}"
+  register: report_data
+  when: report_stat.stat.exists
+
+- name: Display direct report summary
+  debug:
+    msg:
+    - "Report Summary (Direct Access):"
+    - "Total results: {{ (report_data.content | b64decode | from_json).summary.total_vulnerabilities }}"
+    - "High severity issues: {{ (report_data.content | b64decode | from_json).summary.high_severity_count }}"
+    - "Application codes: {{ (report_data.content | b64decode | from_json).summary.app_codes | join(', ') }}"
+    - "Issue types: {{ (report_data.content | b64decode | from_json).summary.issue_types | join(', ') }}"
+    - "Generated at: {{ (report_data.content | b64decode | from_json).summary.generated_at }}"
+    - "Date range: {{ (report_data.content | b64decode | from_json).summary.start_date }} to {{ (report_data.content | b64decode | from_json).summary.end_date }}"
+  when: report_stat.stat.exists
+
+- name: Get email recipient from vault
+  block:
+  - name: Try vault lookup
+    set_fact:
+      email_recipient: "{{ lookup('vars', 'vault')[vault_environment]['vault_extravars']['to'] }}"
+    when: vault is defined
+  rescue:
+  - name: Use default recipient on vault lookup failure
+    set_fact:
+      email_recipient: "{{ to }}"
+
+# Debug output to show what's in the report
+- name: Debug report values
+  debug:
+    msg: |
+      Report Values:
+      - report summary: {{ (report_data.content | b64decode | from_json).summary }}
+      - issue types: {{ (report_data.content | b64decode | from_json).summary.issue_types }}
+      - email_body excerpt: {{ email_content.content | b64decode | truncate(100) }}
+  when: report_stat.stat.exists and email_stat.stat.exists
+
+- name: Send vulnerability report notification
+  ansible.builtin.include_role:
+    name: rbc_sfmo.components.email
+  vars:
+    email_to: "{{ email_recipient }}"
+    email_cc: []
+    email_subject: "Issue Report - {{ ansible_date_time.date }} - All App Codes"
+    issue_types: "{{ (report_data.content | b64decode | from_json).summary.issue_types | join(', ') }}"
+    email_body: "{{ email_content.content | b64decode }}"
+    email_env_domain: "{{ ansible_domain }}"
+    total_vulnerabilities: "{{ (report_data.content | b64decode | from_json).summary.total_vulnerabilities | int }}"
+    start_date: "{{ (report_data.content | b64decode | from_json).summary.start_date }}"
+    end_date: "{{ (report_data.content | b64decode | from_json).summary.end_date }}"
+    generated_at: "{{ (report_data.content | b64decode | from_json).summary.generated_at }}"
+    report_date: "{{ ansible_date_time.date }}"
+    email_attachments:
+    - "{{ processed_report }}"
+  when: report_stat.stat.exists and email_stat.stat.exists
+  register: email_result
+
+- name: Log email notification
+  debug:
+    msg: |
+      Email notification details:
+      - Sent to: {{ email_recipient }}
+      - Environment: {{ vault_environment | upper }}
+      - Total issues: {{ (report_data.content | b64decode | from_json).summary.total_vulnerabilities | int }}
+      - Generated at: {{ (report_data.content | b64decode | from_json).summary.generated_at }}
+      - Date range: {{ (report_data.content | b64decode | from_json).summary.start_date }} to {{ (report_data.content | b64decode | from_json).summary.end_date }}
+      - App Codes: {{ (report_data.content | b64decode | from_json).summary.app_codes | join(', ') }}
+  when: report_stat.stat.exists and email_stat.stat.exists

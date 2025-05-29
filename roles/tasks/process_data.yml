@@ -1,0 +1,55 @@
+---
+# Ansible playbook to process vulnerability data from Elasticsearch
+# This playbook executes a Python script to process the raw data and generate reports
+
+- name: Check if raw data file exists
+  stat:
+    path: "{{ raw_data_file }}"
+  register: input_file_stat
+
+- name: Create empty template file if raw data doesn't exist
+  copy:
+    dest: "{{ raw_data_file }}"
+    content: '{"hits": {"total": {"value": 0}, "hits": []}}'
+  when: not input_file_stat.stat.exists
+
+- name: Process vulnerability data
+  command: >
+    python3 {{ role_path }}/files/process_data.py --input {{ raw_data_file }} --output {{ processed_report }} --email-template {{ email_template }} --email-output {{ email_content_file }}
+  register: process_output
+  changed_when: false
+  failed_when: process_output.rc != 0
+  vars:
+    processed_report: "{{ output_dir }}/vulnerability_report_processed.json"
+    email_content_file: "{{ output_dir }}/email_content.txt"
+    email_template: "{{ role_path }}/files/email_template.txt"
+
+- name: Debug process output
+  debug:
+    msg: "{{ process_output.stdout_lines }}"
+  when: process_output.stdout_lines is defined and process_output.stdout_lines | length > 0
+
+- name: Check if processed file exists
+  stat:
+    path: "{{ processed_report }}"
+  register: output_file_stat
+  vars:
+    processed_report: "{{ output_dir }}/vulnerability_report_processed.json"
+
+- name: Load processed report data
+  slurp:
+    src: "{{ processed_report }}"
+  register: report_content
+  when: output_file_stat.stat.exists
+  vars:
+    processed_report: "{{ output_dir }}/vulnerability_report_processed.json"
+
+- name: Display report summary
+  debug:
+    msg:
+    - "Report Summary:"
+    - "Total results: {{ (report_content.content | b64decode | from_json).summary.total_vulnerabilities }}"
+    - "High severity issues: {{ (report_content.content | b64decode | from_json).summary.high_severity_count }}"
+    - "Application codes: {{ (report_content.content | b64decode | from_json).summary.app_codes | join(', ') }}"
+    - "Issue type: {{ issue_type | default('Vulnerability') }}"
+  when: output_file_stat.stat.exists

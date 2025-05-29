@@ -1,0 +1,15 @@
+app_controller_survey_specs:
+  "{{ .Values.HELIOS_APP_CODE }}_{{ .Values.HELIOS_APP_NAME }}":
+    name: "{{ .Values.HELIOS_APP_CODE }}_{{ .Values.HELIOS_APP_NAME }}"
+    description: "Server Compliance Overview Survey"
+    spec:
+    - question_name: "Enter issue type(s)"
+      question_description: "Enter issue type(s), comma-separated (default: Vulnerability)"
+      required: false
+      type: "text"
+      variable: "survey_issue_type"
+      min: 0
+      max: 100
+      default: "Vulnerability"
+      choices: ""
+      new_question: true
