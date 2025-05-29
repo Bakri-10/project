@@ -2,10 +2,29 @@
 # Ansible playbook to fetch vulnerability data from Elasticsearch
 # This playbook executes a Python script to query Elasticsearch and process the results
 
-- name: Set date range for last 7 days
+- name: Create Python script for date calculation
+  copy:
+    dest: "{{ role_path }}/files/calculate_dates.py"
+    mode: '0755'
+    content: |
+      #!/usr/bin/env python3
+      from datetime import datetime, timedelta
+
+      end_date = datetime.now()
+      start_date = end_date - timedelta(days=7)
+
+      print(f"{start_date.strftime('%Y-%m-%dT%H:%M:%SZ')}")
+      print(f"{end_date.strftime('%Y-%m-%dT%H:%M:%SZ')}")
+
+- name: Calculate date range
+  command: "python3 {{ role_path }}/files/calculate_dates.py"
+  register: date_calc
+  changed_when: false
+
+- name: Set date variables
   set_fact:
-    end_date: "{{ ansible_date_time.iso8601 }}"
-    start_date: "{{ (ansible_date_time.epoch | int - (7 * 24 * 3600)) | timestamp_to_iso8601 }}"
+    start_date: "{{ date_calc.stdout_lines[0] }}"
+    end_date: "{{ date_calc.stdout_lines[1] }}"
 
 - name: Run fetch_data.py to query Elasticsearch
   command: python3 {{ role_path }}/files/fetch_data.py

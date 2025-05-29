@@ -24,8 +24,10 @@ def query_elasticsearch():
     # Get environment variables
     es_host = get_env_var("ES_HOST", required=True)
     es_index = get_env_var("ES_INDEX", required=True)
-    start_date = get_env_var("START_DATE", "")
-    end_date = get_env_var("END_DATE", "")
+    start_date = get_env_var("START_DATE", required=True)
+    end_date = get_env_var("END_DATE", required=True)
+    
+    print(f"Using date range: {start_date} to {end_date}")
     
     # Get authentication if provided
     username = get_env_var("ES_USERNAME", "")
@@ -46,6 +48,15 @@ def query_elasticsearch():
                     {
                         "terms": {
                             "severity.keyword": ["critical", "high"]
+                        }
+                    },
+                    {
+                        "range": {
+                            "@timestamp": {
+                                "gte": start_date,
+                                "lte": end_date,
+                                "format": "strict_date_optional_time"
+                            }
                         }
                     }
                 ]
@@ -75,25 +86,15 @@ def query_elasticsearch():
         }
     }
     
-    # Add date range filter if both start and end dates are provided
-    if start_date and end_date:
-        query["query"]["bool"]["must"].append(
-            {
-                "range": {
-                    "timestamp": {
-                        "gte": start_date,
-                        "lte": end_date
-                    }
-                }
-            }
-        )
-    
     # Set headers
     headers = {
         "Content-Type": "application/json"
     }
     
     try:
+        print(f"Sending query to {search_url}")
+        print(f"Query: {json.dumps(query, indent=2)}")
+        
         # Send the request
         response = requests.post(
             search_url,
@@ -143,6 +144,13 @@ def query_elasticsearch():
                 print(f"Found {len(app_codes_with_issues)} app codes with high severity issues")
                 print(f"Total issue types found: {len(all_issue_types)}")
                 print(f"Issue types: {', '.join(sorted(all_issue_types))}")
+                
+                # Print sample of the data
+                if result.get("hits", {}).get("hits"):
+                    print("\nSample of issues found:")
+                    for hit in result["hits"]["hits"][:3]:
+                        source = hit["_source"]
+                        print(f"- {source.get('issueType', 'Unknown')} ({source.get('severity', 'Unknown')}) in {source.get('appCode', 'Unknown')}")
             else:
                 hits = result.get("hits", {}).get("hits", [])
                 total = result.get("hits", {}).get("total", {}).get("value", 0)
