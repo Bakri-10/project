@@ -1,0 +1,60 @@
+---
+- name: IT Risk Metrics Email Notification
+  hosts: localhost
+  vars:
+    # Environment from the template values
+    vault_env: "{{ vault_environment | default('DEV')}}"
+    # HashiCorp Vault secrets path definitions
+    secrets:
+    - namespace: vault_credentials
+      vault_env: "{{ vault_environment }}"
+      vault_secret_path: "AAP/server_compliance_reporting/credentials"
+    - namespace: vault_extravars
+      vault_env: "{{ vault_environment }}"
+      vault_secret_path: "AAP/server_compliance_reporting/extra_vars"
+
+  tasks:
+  - name: Assign secrets to dedicated variables
+    ansible.builtin.set_fact:
+      # These values would normally come from HashiCorp Vault
+      es_service_id: "SATU0SRVECEWRITE"
+      es_service_id_password: "R4@.iE@GmdVMp3"
+    no_log: true
+
+  - name: Assign extra vars to dedicated variables
+    ansible.builtin.set_fact:
+      # These values would normally come from HashiCorp Vault or the template 
+      to: "feyi.sodipo@rbc.com"
+      es_url: "https://e87a6cd02ed34b0b844d64cc7d8c41a9.ece.saifg.rbc.com:9243"
+      server_compliance_metrics_index: "atu0-server-compliance-metrics"
+
+  - name: Installing elastic module
+    ansible.builtin.pip:
+      name: elasticsearch
+      state: present
+
+  - name: Ensure output directory exists
+    file:
+      path: roles/files/output
+      state: directory
+      mode: '0755'
+
+  - name: Fetch data from Elasticsearch
+    ansible.builtin.include_tasks: roles/tasks/fetch_data.yml
+    vars:
+      raw_data_file: "roles/files/output/vulnerability_report_raw.json"
+
+  - name: Process data and generate reports
+    ansible.builtin.include_tasks: roles/tasks/process_data.yml
+    vars:
+      raw_data_file: "roles/files/output/vulnerability_report_raw.json"
+      output_dir: "roles/files/output"
+      role_path: "roles"
+
+  - name: Send notifications
+    vars:
+      vault_path: "AAP/server_compliance_reporting/extra_vars"
+      raw_data_file: "roles/files/output/vulnerability_report_raw.json"
+      output_dir: "roles/files/output"
+      role_path: "roles"
+    ansible.builtin.include_tasks: roles/tasks/notify_custodian.yml

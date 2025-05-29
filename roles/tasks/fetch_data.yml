@@ -7,13 +7,11 @@
   environment:
     ES_HOST: "{{ es_url }}"
     ES_INDEX: "{{ server_compliance_metrics_index }}"
-    APP_CODES: "{{ app_codes | default('ATU0') }}"
     START_DATE: "{{ lookup('env', 'START_DATE') | default('2024-05-16T00:00:00Z', true) }}"
     END_DATE: "{{ lookup('env', 'END_DATE') | default('2025-05-16T23:59:59Z', true) }}"
     OUTPUT_FILE: "{{ raw_data_file }}"
     ES_USERNAME: "{{ es_service_id | default('') }}"
     ES_PASSWORD: "{{ es_service_id_password | default('') }}"
-    ISSUE_TYPE: "{{ issue_type | default('Vulnerability') }}"
   register: fetch_output
   changed_when: false
   failed_when: fetch_output.rc != 0
@@ -43,5 +41,5 @@
 
 - name: Display summary
   debug:
-    msg: "Found {{ total_vulnerabilities }} vulnerabilities for application code {{ app_codes }}"
+    msg: "Found {{ total_vulnerabilities }} issues across all app codes"
   when: output_file_stat.stat.exists and total_vulnerabilities is defined
