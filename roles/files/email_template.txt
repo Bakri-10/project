@@ -1,11 +1,12 @@
-Subject: Weekly Security Issues Report - {{ report_date }}
+Subject: Security Issues Report - {{ report_date }}
 
 Hello Team,
 
-This is your weekly security scan report for the period {{ start_date }} to {{ end_date }}.
+The automated security scan has been completed for all application codes.
 
 Summary:
 - Total issues found: {{ total_vulnerabilities }}
+- Time period: {{ start_date }} to {{ end_date }}
 - Report generated: {{ generated_at }}
 
 Overall Issue Types Found:
@@ -62,7 +63,7 @@ Compliance Requirements:
 - Medium severity findings must be 5 or fewer
 
 Action Required:
-Please address these compliance issues before the next weekly scan.
+Please address these compliance issues as soon as possible. Applications will be checked again in the next weekly scan.
 {% endif %}
 
 Please review the attached report for detailed information about all security issues.
@@ -72,12 +73,6 @@ The report includes:
 - List of affected components
 - Remediation recommendations
 - Full compliance status for each application
-
-Next Steps:
-1. Review and prioritize the identified issues
-2. Begin remediation of critical and high severity findings
-3. Plan to address all findings before the next weekly scan
-4. Contact the Security team if you need assistance
 
 Best regards,
 Security Compliance Team

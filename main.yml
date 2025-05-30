@@ -33,23 +33,11 @@
       name: elasticsearch
       state: present
 
-  - name: Create required directories
+  - name: Ensure output directory exists
     file:
-      path: "{{ item }}"
+      path: roles/files/output
       state: directory
       mode: '0755'
-    loop:
-    - "roles/files/output"
-    - "roles/files/temp"
-
-  - name: Ensure output files don't exist from previous runs
-    file:
-      path: "{{ item }}"
-      state: absent
-    loop:
-    - "roles/files/output/vulnerability_report_raw.json"
-    - "roles/files/output/vulnerability_report_processed.json"
-    - "roles/files/output/email_content.txt"
 
   - name: Fetch data from Elasticsearch
     ansible.builtin.include_tasks: roles/tasks/fetch_data.yml

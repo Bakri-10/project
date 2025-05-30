@@ -172,9 +172,9 @@ def generate_report(input_file, output_file):
     # Get compliance status for each app
     compliance_status = identify_non_compliant_apps(hits)
     
-    # Get date range from environment variables or use defaults
-    end_date = os.environ.get('END_DATE', datetime.now().strftime("%Y-%m-%d"))
-    start_date = os.environ.get('START_DATE', (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d"))
+    # Get date range (last 7 days by default)
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=7)
     
     # Create report content
     report = {
@@ -184,8 +184,8 @@ def generate_report(input_file, output_file):
             "app_codes": analysis["app_codes"],
             "issue_types": analysis["issue_types"],
             "generated_at": datetime.now().strftime("%Y-%m-%d"),
-            "start_date": start_date,
-            "end_date": end_date,
+            "start_date": start_date.strftime("%Y-%m-%d"),
+            "end_date": end_date.strftime("%Y-%m-%d"),
             "high_severity_issues": analysis["high_severity_issues"],
             "non_compliant_apps": [
                 {
