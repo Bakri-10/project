@@ -1,0 +1,35 @@
+---
+- name: Ensure Python requirements are installed
+  pip:
+    requirements: "{{ role_path }}/files/requirements.txt"
+    state: present
+  become: true
+
+- name: Create temporary directory for IIPM data
+  file:
+    path: "{{ ansible_env.HOME }}/iipm_temp"
+    state: directory
+    mode: '0755'
+
+- name: Copy IIPM data fetching script
+  copy:
+    src: "{{ role_path }}/files/fetch_iipm_data.py"
+    dest: "{{ ansible_env.HOME }}/iipm_temp/fetch_iipm_data.py"
+    mode: '0755'
+
+- name: Fetch IIPM data and update Elasticsearch
+  command: >
+    python3 {{ ansible_env.HOME }}/iipm_temp/fetch_iipm_data.py  "{{ elasticsearch_host }}"  "{{ iipm_index_name }}"  "{{ target_index_name }}" "{{ ansible_env.HOME }}/iipm_temp/update_summary.json"
+  register: fetch_result
+  changed_when: fetch_result.rc == 0
+  failed_when: fetch_result.rc != 0
+
+- name: Display update results
+  debug:
+    var: fetch_result.stdout_lines
+
+- name: Clean up temporary files
+  file:
+    path: "{{ ansible_env.HOME }}/iipm_temp"
+    state: absent
+  when: cleanup_temp | default(true) | bool

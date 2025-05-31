@@ -1,0 +1,24 @@
+---
+# Organization Configuration
+organization_name: "default"
+project_name: "IIPM Data Sync"
+inventory_name: "Default Inventory"
+
+# Credentials
+machine_credential: "Machine Credential"
+
+# Execution Environment
+execution_environment: "Default execution environment"
+
+# Elasticsearch Configuration
+elasticsearch_host: "http://localhost:9200"
+iipm_index_name: "your-iipm-index"
+target_index_name: "atu0-server-compliance-metrics"
+
+# Job Schedule
+job_schedule:
+  name: "IIPM Data Sync Schedule"
+  description: "Schedule for IIPM to Elasticsearch data synchronization"
+  enabled: true
+  rrule: "FREQ=DAILY;INTERVAL=1" # Run daily
+  timezone: "UTC"

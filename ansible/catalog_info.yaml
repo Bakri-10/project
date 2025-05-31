@@ -1,0 +1,17 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: iipm-es-sync
+  description: IIPM to Elasticsearch Data Synchronization
+  tags:
+  - ansible
+  - elasticsearch
+  - iipm
+spec:
+  type: service
+  lifecycle: production
+  owner: your-team-name
+  system: data-integration
+  dependsOn:
+  - resource:elasticsearch
+  - resource:iipm

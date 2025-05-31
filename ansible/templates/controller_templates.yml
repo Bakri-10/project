@@ -1,0 +1,17 @@
+---
+- name: Configure IIPM Data Fetch Job Template
+  ansible.controller.job_template:
+    name: "IIPM to Elasticsearch Data Sync"
+    organization: "{{ organization_name }}"
+    project: "{{ project_name }}"
+    inventory: "{{ inventory_name }}"
+    playbook: "roles/iipm-to-es/tasks/main.yml"
+    credential: "{{ machine_credential }}"
+    job_type: "run"
+    state: "present"
+    execution_environment: "{{ execution_environment }}"
+    extra_vars:
+      elasticsearch_host: "{{ elasticsearch_host }}"
+      iipm_index_name: "{{ iipm_index_name }}"
+      target_index_name: "{{ target_index_name }}"
+      cleanup_temp: true
