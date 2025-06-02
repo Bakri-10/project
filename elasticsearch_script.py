@@ -1,6 +1,6 @@
 import json
 import argparse
-from elasticsearch import Elasticsearch, helpers
+from elasticsearch import Elasticsearch, helpers, BadRequestError
 from requests.auth import HTTPBasicAuth
 from datetime import datetime
 import sys
@@ -74,7 +74,7 @@ def main(argv):
     es_service_id = args.es_service_id
     es_password = args.es_password
     json_file_path = args.json_file_path
-    index_name = args.index_name
+    index_name = args.index_name.lower()  # Elasticsearch indices must be lowercase
     
     print(f"Processing JSON file: {json_file_path}")
     
@@ -102,6 +102,13 @@ def main(argv):
         print("Step 3: Converting roles to objects...")
         final_data = transform_roles_obj(formatted_data)
         
+        # Validate data structure before sending to Elasticsearch
+        for item in final_data:
+            if not isinstance(item, dict):
+                raise ValueError(f"Invalid data structure: {item}")
+            if "roles" in item and not isinstance(item["roles"], dict):
+                raise ValueError(f"Invalid roles structure in: {item}")
+        
         print("Data transformation completed successfully")
         
     except FileNotFoundError:
@@ -114,11 +121,14 @@ def main(argv):
         print(f"Error processing JSON data: {e}")
         return
         
-    # Test Elasticsearch connection
+    # Test Elasticsearch connection with timeout and retry settings
     try:
         es = Elasticsearch(
             [es_url],
             http_auth=HTTPBasicAuth(es_service_id, es_password),
+            retry_on_timeout=True,
+            timeout=30,
+            max_retries=3,
             node_class='requests'
         )
         
@@ -133,13 +143,30 @@ def main(argv):
         print(f"Error connecting to Elasticsearch: {e}")
         return
     
-    # Ensure index exists
+    # Ensure index exists with proper settings
     try:
         if not es.indices.exists(index=index_name):
-            es.indices.create(index=index_name)
-            print(f"Index '{index_name}' created.")
+            # Create index with basic settings
+            index_settings = {
+                "settings": {
+                    "number_of_shards": 1,
+                    "number_of_replicas": 1
+                },
+                "mappings": {
+                    "properties": {
+                        "timestamp": {"type": "date"},
+                        "appCode": {"type": "keyword"},
+                        "roles": {"type": "object"}
+                    }
+                }
+            }
+            es.indices.create(index=index_name, body=index_settings)
+            print(f"Index '{index_name}' created with settings.")
         else:
             print(f"Using existing index '{index_name}'")
+    except BadRequestError as e:
+        print(f"Error creating/checking index (Bad Request): {e}")
+        return
     except Exception as e:
         print(f"Error creating/checking index: {e}")
         return
