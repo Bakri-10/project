@@ -68,6 +68,29 @@ def transform_roles_obj(data):
             item["roles"] = transformed_roles
     return data
 
+# Function to ensure proper field formatting for Elasticsearch
+def format_fields_for_elasticsearch(data):
+    """
+    Ensure fields are properly formatted for Elasticsearch indexing
+    to create both text and keyword mappings
+    """
+    formatted_data = []
+    for item in data:
+        # Create a copy to avoid modifying original data
+        formatted_item = item.copy()
+        
+        # Ensure string fields are properly formatted for keyword mapping
+        string_fields = ['lineOfBusiness', 'contactPerson', 'contactType', 'contactMechanism', 'appCode', 'name']
+        for field in string_fields:
+            if field in formatted_item and formatted_item[field]:
+                # Ensure the field value is a string and not None
+                if formatted_item[field] != "N/A" and formatted_item[field] is not None:
+                    formatted_item[field] = str(formatted_item[field])
+        
+        formatted_data.append(formatted_item)
+    
+    return formatted_data
+
 def main(argv):
     args = parse_arguments()
     es_url = args.es_url
@@ -101,6 +124,9 @@ def main(argv):
             
         print("Step 3: Converting roles to objects...")
         final_data = transform_roles_obj(formatted_data)
+        
+        print("Step 4: Formatting fields for Elasticsearch...")
+        final_data = format_fields_for_elasticsearch(final_data)
         
         # Validate data structure before sending to Elasticsearch
         for item in final_data:
@@ -155,7 +181,60 @@ def main(argv):
                 "mappings": {
                     "properties": {
                         "timestamp": {"type": "date"},
-                        "appCode": {"type": "keyword"},
+                        "appCode": {
+                            "type": "text",
+                            "fields": {
+                                "keyword": {
+                                    "type": "keyword",
+                                    "ignore_above": 256
+                                }
+                            }
+                        },
+                        "name": {
+                            "type": "text",
+                            "fields": {
+                                "keyword": {
+                                    "type": "keyword",
+                                    "ignore_above": 256
+                                }
+                            }
+                        },
+                        "lineOfBusiness": {
+                            "type": "text",
+                            "fields": {
+                                "keyword": {
+                                    "type": "keyword",
+                                    "ignore_above": 256
+                                }
+                            }
+                        },
+                        "contactPerson": {
+                            "type": "text",
+                            "fields": {
+                                "keyword": {
+                                    "type": "keyword",
+                                    "ignore_above": 256
+                                }
+                            }
+                        },
+                        "contactType": {
+                            "type": "text",
+                            "fields": {
+                                "keyword": {
+                                    "type": "keyword",
+                                    "ignore_above": 256
+                                }
+                            }
+                        },
+                        "contactMechanism": {
+                            "type": "text",
+                            "fields": {
+                                "keyword": {
+                                    "type": "keyword",
+                                    "ignore_above": 256
+                                }
+                            }
+                        },
                         "roles": {"type": "object"}
                     }
                 }
