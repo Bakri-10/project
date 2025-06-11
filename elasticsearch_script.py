@@ -13,7 +13,21 @@ def parse_arguments():
     parser.add_argument('--json-file-path', required=True, help='JSON data as retrieved via the ansible playbook')
     parser.add_argument('--index-name', required=True, help='Elasticsearch index name')
     
-    return parser.parse_args()
+    # Debug: Show raw command line arguments
+    print(f"Debug - Raw sys.argv: {sys.argv}")
+    
+    try:
+        args = parser.parse_args()
+        
+        # Debug: Show parsed arguments
+        print(f"Debug - Parsed arguments:")
+        for arg_name, arg_value in vars(args).items():
+            print(f"  {arg_name}: {type(arg_value)} = {arg_value}")
+            
+        return args
+    except Exception as e:
+        print(f"Error parsing arguments: {e}")
+        raise
 
 def transform_roles(data):
     print("I am here in parse_json_file")
@@ -133,7 +147,28 @@ def main(argv):
     es_service_id = args.es_service_id
     es_password = args.es_password
     json_file_path = args.json_file_path
-    index_name = args.index_name.lower()  # Elasticsearch indices must be lowercase
+    index_name = args.index_name
+    
+    # Debug: Show what we received
+    print(f"Debug - Raw arguments received:")
+    print(f"  es_url type: {type(es_url)} = {es_url}")
+    print(f"  es_service_id type: {type(es_service_id)} = {es_service_id}")
+    print(f"  json_file_path type: {type(json_file_path)} = {json_file_path}")
+    print(f"  index_name type: {type(index_name)} = {index_name}")
+    
+    # Ensure index_name is a string
+    if not isinstance(index_name, str):
+        print(f"ERROR: index_name is not a string! Type: {type(index_name)}, Value: {index_name}")
+        if isinstance(index_name, dict) and 'server_compliance_metrics_index' in index_name:
+            print("Attempting to extract index name from dictionary...")
+            index_name = index_name.get('server_compliance_metrics_index', 'default-index')
+            print(f"Extracted index name: {index_name}")
+        else:
+            print("Cannot extract a valid index name. Exiting.")
+            return
+    
+    index_name = index_name.lower()  # Elasticsearch indices must be lowercase
+    print(f"Final index name: {index_name}")
     
     print(f"Processing JSON file: {json_file_path}")
     
