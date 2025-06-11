@@ -177,29 +177,37 @@ def main(argv):
     print(f"  json_file_path type: {type(json_file_path)} = {json_file_path}")
     print(f"  index_name type: {type(index_name)} = {index_name}")
     
-    # Ensure index_name is a string
+    # Handle index_name parsing - it might be a string representation of a dictionary
     if not isinstance(index_name, str):
         print(f"ERROR: index_name is not a string! Type: {type(index_name)}, Value: {index_name}")
-        if isinstance(index_name, dict):
-            # Check for common dictionary keys that might contain the index name
-            possible_keys = ['server_compliance_metrics_index', 'index_name', 'index']
-            extracted_name = None
-            for key in possible_keys:
-                if key in index_name:
-                    extracted_name = index_name[key]
-                    print(f"Attempting to extract index name from dictionary key '{key}': {extracted_name}")
-                    break
-            
-            if extracted_name and isinstance(extracted_name, str):
-                index_name = extracted_name
-                print(f"Successfully extracted index name: {index_name}")
-            else:
-                print("Cannot extract a valid index name from dictionary. Exiting.")
-                print(f"Available keys in dictionary: {list(index_name.keys()) if hasattr(index_name, 'keys') else 'N/A'}")
-                return
+        return
+    
+    # Check if index_name looks like a dictionary string and try to parse it
+    if index_name.startswith('{') or 'server_compliance_metrics_index:' in index_name:
+        print(f"Index name appears to contain dictionary data: {index_name}")
+        
+        # Try to extract the actual index name from common patterns
+        import re
+        
+        # Look for patterns like "server_compliance_metrics_index: some-index-name"
+        match = re.search(r'server_compliance_metrics_index[:\s]+([a-zA-Z0-9_.-]+)', index_name)
+        if match:
+            extracted_name = match.group(1).strip().rstrip(',').rstrip('}').strip("'\"")
+            print(f"Extracted index name from pattern: {extracted_name}")
+            index_name = extracted_name
         else:
-            print("Cannot extract a valid index name. Exiting.")
-            return
+            # Try to find any valid index-like string
+            # Look for patterns that might be index names
+            potential_indices = re.findall(r'[a-z][a-z0-9_.-]*', index_name.lower())
+            valid_indices = [idx for idx in potential_indices if len(idx) > 3 and 'compliance' in idx]
+            
+            if valid_indices:
+                index_name = valid_indices[0]
+                print(f"Using potential index name: {index_name}")
+            else:
+                print("Cannot extract a valid index name from the provided string.")
+                print("Please check your Ansible playbook variable expansion.")
+                return
     
     # Additional safety check - ensure it's still a string after extraction
     if not isinstance(index_name, str):
