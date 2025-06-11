@@ -234,6 +234,21 @@ def main(argv):
             
         print("Elasticsearch connection successful")
         
+        # Get Elasticsearch info for troubleshooting
+        try:
+            es_info = es.info()
+            print(f"Elasticsearch server version: {es_info.get('version', {}).get('number', 'unknown')}")
+            print(f"Cluster name: {es_info.get('cluster_name', 'unknown')}")
+        except Exception as e:
+            print(f"Could not retrieve Elasticsearch server info: {e}")
+            
+        # Show client version
+        try:
+            import elasticsearch
+            print(f"Elasticsearch client version: {elasticsearch.__version__}")
+        except Exception as e:
+            print(f"Could not retrieve Elasticsearch client version: {e}")
+        
     except Exception as e:
         print(f"Error connecting to Elasticsearch: {e}")
         return
@@ -308,15 +323,42 @@ def main(argv):
                     }
                 }
             }
-            es.indices.create(index=index_name, body=index_settings)
-            print(f"Index '{index_name}' created with settings.")
+            
+            # Try newer API first, fall back to older API
+            try:
+                # Newer elasticsearch client (8.x+)
+                es.indices.create(index=index_name, **index_settings)
+                print(f"Index '{index_name}' created with settings (new API).")
+            except TypeError:
+                # Older elasticsearch client (7.x and below)
+                es.indices.create(index=index_name, body=index_settings)
+                print(f"Index '{index_name}' created with settings (legacy API).")
+            except BadRequestError as mapping_error:
+                print(f"Complex mapping failed, trying simpler approach: {mapping_error}")
+                # Try creating with just basic settings, no complex mapping
+                simple_settings = {
+                    "settings": {
+                        "number_of_shards": 1,
+                        "number_of_replicas": 1
+                    }
+                }
+                try:
+                    es.indices.create(index=index_name, **simple_settings)
+                    print(f"Index '{index_name}' created with simple settings (new API).")
+                except TypeError:
+                    es.indices.create(index=index_name, body=simple_settings)
+                    print(f"Index '{index_name}' created with simple settings (legacy API).")
         else:
             print(f"Using existing index '{index_name}'")
     except BadRequestError as e:
         print(f"Error creating/checking index (Bad Request): {e}")
+        print(f"Error details: {e.info if hasattr(e, 'info') else 'No additional info'}")
+        print(f"Index name: {index_name}")
+        print(f"Index settings: {index_settings}")
         return
     except Exception as e:
         print(f"Error creating/checking index: {e}")
+        print(f"Error type: {type(e).__name__}")
         return
         
     # Process documents for Elasticsearch
@@ -346,19 +388,34 @@ def main(argv):
             # Check if document exists
             if es.exists(index=index_name, id=appCode):
                 # Update existing document by adding/merging new fields
-                response = es.update(
-                    index=index_name, 
-                    id=appCode, 
-                    body={
-                        "doc": appcode_detail,
-                        "doc_as_upsert": True
-                    }
-                )
+                try:
+                    # Try newer API first
+                    response = es.update(
+                        index=index_name, 
+                        id=appCode, 
+                        doc=appcode_detail,
+                        doc_as_upsert=True
+                    )
+                except TypeError:
+                    # Fall back to older API
+                    response = es.update(
+                        index=index_name, 
+                        id=appCode, 
+                        body={
+                            "doc": appcode_detail,
+                            "doc_as_upsert": True
+                        }
+                    )
                 print(f"✓ Document {appCode} updated: {response['result']}")
                 success_count += 1
             else:
                 # Create new document
-                response = es.index(index=index_name, id=appCode, body=appcode_detail)
+                try:
+                    # Try newer API first
+                    response = es.index(index=index_name, id=appCode, document=appcode_detail)
+                except TypeError:
+                    # Fall back to older API
+                    response = es.index(index=index_name, id=appCode, body=appcode_detail)
                 print(f"✓ Document {appCode} created: {response['result']}")
                 success_count += 1
                 
