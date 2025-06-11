@@ -4,6 +4,7 @@ from elasticsearch import Elasticsearch, helpers, BadRequestError
 from requests.auth import HTTPBasicAuth
 from datetime import datetime
 import sys
+import re
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Publish Chorus API Compliance Reporting JSON data to Elasticsearch')
@@ -168,6 +169,16 @@ def main(argv):
             return
     
     index_name = index_name.lower()  # Elasticsearch indices must be lowercase
+    
+    # Validate index name according to Elasticsearch rules
+    if not re.match(r'^[a-z0-9][a-z0-9_.-]*$', index_name):
+        print(f"ERROR: Invalid index name '{index_name}'. Index names must start with a lowercase letter or number and contain only lowercase letters, numbers, hyphens, underscores, and dots.")
+        return
+    
+    if len(index_name) > 255 or len(index_name) == 0:
+        print(f"ERROR: Index name length must be between 1 and 255 characters. Current length: {len(index_name)}")
+        return
+        
     print(f"Final index name: {index_name}")
     
     print(f"Processing JSON file: {json_file_path}")
@@ -289,8 +300,13 @@ def main(argv):
         return
     
     # Ensure index exists with proper settings
+    index_settings = None  # Initialize to avoid undefined variable in error handling
     try:
-        if not es.indices.exists(index=index_name):
+        print(f"Checking if index '{index_name}' exists...")
+        index_exists = es.indices.exists(index=index_name)
+        print(f"Index exists check result: {index_exists}")
+        
+        if not index_exists:
             # Create index with basic settings
             index_settings = {
                 "settings": {
@@ -388,12 +404,16 @@ def main(argv):
     except BadRequestError as e:
         print(f"Error creating/checking index (Bad Request): {e}")
         print(f"Error details: {e.info if hasattr(e, 'info') else 'No additional info'}")
-        print(f"Index name: {index_name}")
-        print(f"Index settings: {index_settings}")
+        print(f"Index name (type: {type(index_name)}): {index_name}")
+        if index_settings:
+            print(f"Index settings: {index_settings}")
+        else:
+            print("Index settings: Not defined (index may already exist)")
         return
     except Exception as e:
         print(f"Error creating/checking index: {e}")
         print(f"Error type: {type(e).__name__}")
+        print(f"Index name (type: {type(index_name)}): {index_name}")
         return
         
     # Process documents for Elasticsearch
