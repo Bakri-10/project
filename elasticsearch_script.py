@@ -46,26 +46,62 @@ def transform_roles(data):
     return transformed_data
 
 def format_roles(data):
-    if "roles" in data:
-        for role, values in data["roles"].items():
-            # Convert list to comma-separated string
-            data["roles"][role] = ", ".join(values)
+    if "roles" in data and data["roles"]:
+        # Check if roles is actually a dictionary
+        if not isinstance(data["roles"], dict):
+            print(f"Warning: roles field is not a dictionary in format_roles for item {data.get('appCode', 'unknown')}: {type(data['roles'])} - {data['roles']}")
+            # Convert to empty dict if it's not a dictionary
+            data["roles"] = {}
+            return data
+            
+        try:
+            for role, values in data["roles"].items():
+                # Convert list to comma-separated string
+                if isinstance(values, list):
+                    data["roles"][role] = ", ".join(str(v) for v in values)
+                elif isinstance(values, str):
+                    data["roles"][role] = values
+                else:
+                    data["roles"][role] = str(values) if values else ""
+        except Exception as e:
+            print(f"Error formatting roles for item {data.get('appCode', 'unknown')}: {e}")
+            data["roles"] = {}
     return data
 
 # Function to transform roles into objects to new json format
 def transform_roles_obj(data):
     for item in data:
-        if "roles" in item:
+        if "roles" in item and item["roles"]:
+            # Check if roles is actually a dictionary
+            if not isinstance(item["roles"], dict):
+                print(f"Warning: roles field is not a dictionary for item {item.get('appCode', 'unknown')}: {type(item['roles'])} - {item['roles']}")
+                # Convert to empty dict if it's not a dictionary
+                item["roles"] = {}
+                continue
+                
             transformed_roles = {}
-            for role, value in item["roles"].items():
-                if value:  # Check if the value is not empty
-                    if "," in value:  # If the value is comma-separated, split into a list
-                        transformed_roles[role] = {"ids": [v.strip() for v in value.split(",")]}
-                    else:  # Otherwise, treat it as a single ID
-                        transformed_roles[role] = {"id": value.strip()}
-                else:  # If the value is empty, set it to an empty object
-                    transformed_roles[role] = {}
-            item["roles"] = transformed_roles
+            try:
+                for role, value in item["roles"].items():
+                    if value:  # Check if the value is not empty
+                        if isinstance(value, str) and "," in value:  # If the value is comma-separated, split into a list
+                            transformed_roles[role] = {"ids": [v.strip() for v in value.split(",")]}
+                        elif isinstance(value, str):  # Otherwise, treat it as a single ID
+                            transformed_roles[role] = {"id": value.strip()}
+                        elif isinstance(value, list):  # If it's already a list, handle it
+                            if len(value) > 1:
+                                transformed_roles[role] = {"ids": [str(v).strip() for v in value]}
+                            elif len(value) == 1:
+                                transformed_roles[role] = {"id": str(value[0]).strip()}
+                            else:
+                                transformed_roles[role] = {}
+                        else:  # For any other type, convert to string
+                            transformed_roles[role] = {"id": str(value).strip()}
+                    else:  # If the value is empty, set it to an empty object
+                        transformed_roles[role] = {}
+                item["roles"] = transformed_roles
+            except Exception as e:
+                print(f"Error processing roles for item {item.get('appCode', 'unknown')}: {e}")
+                item["roles"] = {}
     return data
 
 # Function to ensure proper field formatting for Elasticsearch
@@ -114,27 +150,60 @@ def main(argv):
         
         # Process data through all transformation steps
         print("Step 1: Transforming roles...")
-        transformed_data = transform_roles(data)
+        try:
+            transformed_data = transform_roles(data)
+        except Exception as e:
+            print(f"Error in transform_roles: {e}")
+            return
         
         print("Step 2: Formatting roles...")
-        if isinstance(transformed_data, list):
-            formatted_data = [format_roles(item) for item in transformed_data]
-        else:
-            formatted_data = format_roles(transformed_data)
+        try:
+            if isinstance(transformed_data, list):
+                formatted_data = []
+                for i, item in enumerate(transformed_data):
+                    try:
+                        formatted_item = format_roles(item)
+                        formatted_data.append(formatted_item)
+                    except Exception as e:
+                        print(f"Error formatting roles for record {i} (appCode: {item.get('appCode', 'unknown')}): {e}")
+                        # Add the item without role formatting as fallback
+                        formatted_data.append(item)
+            else:
+                formatted_data = format_roles(transformed_data)
+        except Exception as e:
+            print(f"Error in format_roles step: {e}")
+            return
             
         print("Step 3: Converting roles to objects...")
-        final_data = transform_roles_obj(formatted_data)
+        try:
+            final_data = transform_roles_obj(formatted_data)
+        except Exception as e:
+            print(f"Error in transform_roles_obj: {e}")
+            return
         
         print("Step 4: Formatting fields for Elasticsearch...")
-        final_data = format_fields_for_elasticsearch(final_data)
+        try:
+            final_data = format_fields_for_elasticsearch(final_data)
+        except Exception as e:
+            print(f"Error in format_fields_for_elasticsearch: {e}")
+            return
         
         # Validate data structure before sending to Elasticsearch
-        for item in final_data:
-            if not isinstance(item, dict):
-                raise ValueError(f"Invalid data structure: {item}")
-            if "roles" in item and not isinstance(item["roles"], dict):
-                raise ValueError(f"Invalid roles structure in: {item}")
+        valid_data = []
+        for i, item in enumerate(final_data):
+            try:
+                if not isinstance(item, dict):
+                    print(f"Warning: Skipping invalid data structure at index {i}: {type(item)}")
+                    continue
+                if "roles" in item and not isinstance(item["roles"], dict):
+                    print(f"Warning: Invalid roles structure for item {item.get('appCode', 'unknown')}, converting to empty dict")
+                    item["roles"] = {}
+                valid_data.append(item)
+            except Exception as e:
+                print(f"Error validating item at index {i}: {e}")
+                continue
         
+        final_data = valid_data
         print("Data transformation completed successfully")
         
     except FileNotFoundError:
@@ -268,6 +337,12 @@ def main(argv):
         appCode = appcode_detail["appCode"]
         
         try:
+            # Debug: Show the structure of roles field if it exists
+            if "roles" in appcode_detail:
+                roles_type = type(appcode_detail["roles"])
+                if not isinstance(appcode_detail["roles"], dict):
+                    print(f"Debug: Document {appCode} has roles of type {roles_type}: {appcode_detail['roles']}")
+                    
             # Check if document exists
             if es.exists(index=index_name, id=appCode):
                 # Update existing document by adding/merging new fields
@@ -289,6 +364,7 @@ def main(argv):
                 
         except Exception as e:
             print(f"✗ Error processing document {appCode}: {e}")
+            print(f"   Document structure: {appcode_detail}")
             error_count += 1
             
     # Summary
