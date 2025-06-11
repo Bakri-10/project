@@ -17,6 +17,11 @@ def parse_arguments():
     # Debug: Show raw command line arguments
     print(f"Debug - Raw sys.argv: {sys.argv}")
     
+    # Check if any arguments contain dictionary-like strings that need parsing
+    for i, arg in enumerate(sys.argv):
+        if isinstance(arg, str) and ('{' in arg and '}' in arg):
+            print(f"Warning: Argument {i} appears to contain dictionary data: {arg}")
+    
     try:
         args = parser.parse_args()
         
@@ -24,6 +29,9 @@ def parse_arguments():
         print(f"Debug - Parsed arguments:")
         for arg_name, arg_value in vars(args).items():
             print(f"  {arg_name}: {type(arg_value)} = {arg_value}")
+            # Additional check for contaminated arguments
+            if not isinstance(arg_value, str):
+                print(f"  WARNING: {arg_name} is not a string! Type: {type(arg_value)}")
             
         return args
     except Exception as e:
@@ -143,12 +151,24 @@ def format_fields_for_elasticsearch(data):
     return formatted_data
 
 def main(argv):
+    print(f"=== MAIN FUNCTION START ===")
+    print(f"Raw argv parameter: {argv}")
+    
     args = parse_arguments()
+    
+    print(f"=== AFTER PARSE_ARGUMENTS ===")
     es_url = args.es_url
     es_service_id = args.es_service_id
     es_password = args.es_password
     json_file_path = args.json_file_path
     index_name = args.index_name
+    
+    print(f"Individual variable assignments:")
+    print(f"  es_url: {type(es_url)} = {es_url}")
+    print(f"  es_service_id: {type(es_service_id)} = {es_service_id}")
+    print(f"  es_password: {type(es_password)} = {es_password}")
+    print(f"  json_file_path: {type(json_file_path)} = {json_file_path}")
+    print(f"  index_name: {type(index_name)} = {index_name}")
     
     # Debug: Show what we received
     print(f"Debug - Raw arguments received:")
@@ -160,13 +180,31 @@ def main(argv):
     # Ensure index_name is a string
     if not isinstance(index_name, str):
         print(f"ERROR: index_name is not a string! Type: {type(index_name)}, Value: {index_name}")
-        if isinstance(index_name, dict) and 'server_compliance_metrics_index' in index_name:
-            print("Attempting to extract index name from dictionary...")
-            index_name = index_name.get('server_compliance_metrics_index', 'default-index')
-            print(f"Extracted index name: {index_name}")
+        if isinstance(index_name, dict):
+            # Check for common dictionary keys that might contain the index name
+            possible_keys = ['server_compliance_metrics_index', 'index_name', 'index']
+            extracted_name = None
+            for key in possible_keys:
+                if key in index_name:
+                    extracted_name = index_name[key]
+                    print(f"Attempting to extract index name from dictionary key '{key}': {extracted_name}")
+                    break
+            
+            if extracted_name and isinstance(extracted_name, str):
+                index_name = extracted_name
+                print(f"Successfully extracted index name: {index_name}")
+            else:
+                print("Cannot extract a valid index name from dictionary. Exiting.")
+                print(f"Available keys in dictionary: {list(index_name.keys()) if hasattr(index_name, 'keys') else 'N/A'}")
+                return
         else:
             print("Cannot extract a valid index name. Exiting.")
             return
+    
+    # Additional safety check - ensure it's still a string after extraction
+    if not isinstance(index_name, str):
+        print(f"ERROR: After extraction attempt, index_name is still not a string! Type: {type(index_name)}")
+        return
     
     index_name = index_name.lower()  # Elasticsearch indices must be lowercase
     print(f"Final index name: {index_name}")
