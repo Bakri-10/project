@@ -169,6 +169,8 @@ def main(argv):
             return
     
     index_name = index_name.lower()  # Elasticsearch indices must be lowercase
+    print(f"Final index name: {index_name}")
+    print(f"CHECKPOINT 1 - index_name type: {type(index_name)}, value: {index_name}")
     
     # Validate index name according to Elasticsearch rules
     if not re.match(r'^[a-z0-9][a-z0-9_.-]*$', index_name):
@@ -179,7 +181,12 @@ def main(argv):
         print(f"ERROR: Index name length must be between 1 and 255 characters. Current length: {len(index_name)}")
         return
         
-    print(f"Final index name: {index_name}")
+    # Store the validated index name to prevent accidental overwriting
+    VALIDATED_INDEX_NAME = str(index_name)  # Ensure it's always a string
+    
+    def get_safe_index_name():
+        """Return the validated index name, ensuring it's always a string"""
+        return VALIDATED_INDEX_NAME
     
     print(f"Processing JSON file: {json_file_path}")
     
@@ -188,11 +195,14 @@ def main(argv):
         with open(json_file_path, "r") as infile:
             data = json.load(infile)
             
+        print(f"CHECKPOINT 2 - index_name type: {type(index_name)}, value: {index_name}")
+            
         if not data:
             print("Error: JSON file is empty or contains no data.")
             return
             
         print(f"Loaded {len(data)} records from JSON file")
+        print(f"CHECKPOINT 3 - index_name type: {type(index_name)}, value: {index_name}")
         
         # Process data through all transformation steps
         print("Step 1: Transforming roles...")
@@ -201,6 +211,8 @@ def main(argv):
         except Exception as e:
             print(f"Error in transform_roles: {e}")
             return
+        
+        print(f"CHECKPOINT 4 - index_name type: {type(index_name)}, value: {index_name}")
         
         print("Step 2: Formatting roles...")
         try:
@@ -220,6 +232,8 @@ def main(argv):
             print(f"Error in format_roles step: {e}")
             return
             
+        print(f"CHECKPOINT 5 - index_name type: {type(index_name)}, value: {index_name}")
+            
         print("Step 3: Converting roles to objects...")
         try:
             final_data = transform_roles_obj(formatted_data)
@@ -227,12 +241,16 @@ def main(argv):
             print(f"Error in transform_roles_obj: {e}")
             return
         
+        print(f"CHECKPOINT 6 - index_name type: {type(index_name)}, value: {index_name}")
+        
         print("Step 4: Formatting fields for Elasticsearch...")
         try:
             final_data = format_fields_for_elasticsearch(final_data)
         except Exception as e:
             print(f"Error in format_fields_for_elasticsearch: {e}")
             return
+        
+        print(f"CHECKPOINT 7 - index_name type: {type(index_name)}, value: {index_name}")
         
         # Validate data structure before sending to Elasticsearch
         valid_data = []
@@ -302,8 +320,9 @@ def main(argv):
     # Ensure index exists with proper settings
     index_settings = None  # Initialize to avoid undefined variable in error handling
     try:
-        print(f"Checking if index '{index_name}' exists...")
-        index_exists = es.indices.exists(index=index_name)
+        safe_index_name = get_safe_index_name()
+        print(f"Checking if index '{safe_index_name}' exists...")
+        index_exists = es.indices.exists(index=safe_index_name)
         print(f"Index exists check result: {index_exists}")
         
         if not index_exists:
@@ -378,12 +397,12 @@ def main(argv):
             # Try newer API first, fall back to older API
             try:
                 # Newer elasticsearch client (8.x+)
-                es.indices.create(index=index_name, **index_settings)
-                print(f"Index '{index_name}' created with settings (new API).")
+                es.indices.create(index=safe_index_name, **index_settings)
+                print(f"Index '{safe_index_name}' created with settings (new API).")
             except TypeError:
                 # Older elasticsearch client (7.x and below)
-                es.indices.create(index=index_name, body=index_settings)
-                print(f"Index '{index_name}' created with settings (legacy API).")
+                es.indices.create(index=safe_index_name, body=index_settings)
+                print(f"Index '{safe_index_name}' created with settings (legacy API).")
             except BadRequestError as mapping_error:
                 print(f"Complex mapping failed, trying simpler approach: {mapping_error}")
                 # Try creating with just basic settings, no complex mapping
@@ -394,13 +413,13 @@ def main(argv):
                     }
                 }
                 try:
-                    es.indices.create(index=index_name, **simple_settings)
-                    print(f"Index '{index_name}' created with simple settings (new API).")
+                    es.indices.create(index=safe_index_name, **simple_settings)
+                    print(f"Index '{safe_index_name}' created with simple settings (new API).")
                 except TypeError:
-                    es.indices.create(index=index_name, body=simple_settings)
-                    print(f"Index '{index_name}' created with simple settings (legacy API).")
+                    es.indices.create(index=safe_index_name, body=simple_settings)
+                    print(f"Index '{safe_index_name}' created with simple settings (legacy API).")
         else:
-            print(f"Using existing index '{index_name}'")
+            print(f"Using existing index '{safe_index_name}'")
     except BadRequestError as e:
         print(f"Error creating/checking index (Bad Request): {e}")
         print(f"Error details: {e.info if hasattr(e, 'info') else 'No additional info'}")
@@ -441,12 +460,12 @@ def main(argv):
                     print(f"Debug: Document {appCode} has roles of type {roles_type}: {appcode_detail['roles']}")
                     
             # Check if document exists
-            if es.exists(index=index_name, id=appCode):
+            if es.exists(index=get_safe_index_name(), id=appCode):
                 # Update existing document by adding/merging new fields
                 try:
                     # Try newer API first
                     response = es.update(
-                        index=index_name, 
+                        index=get_safe_index_name(), 
                         id=appCode, 
                         doc=appcode_detail,
                         doc_as_upsert=True
@@ -454,7 +473,7 @@ def main(argv):
                 except TypeError:
                     # Fall back to older API
                     response = es.update(
-                        index=index_name, 
+                        index=get_safe_index_name(), 
                         id=appCode, 
                         body={
                             "doc": appcode_detail,
@@ -467,10 +486,10 @@ def main(argv):
                 # Create new document
                 try:
                     # Try newer API first
-                    response = es.index(index=index_name, id=appCode, document=appcode_detail)
+                    response = es.index(index=get_safe_index_name(), id=appCode, document=appcode_detail)
                 except TypeError:
                     # Fall back to older API
-                    response = es.index(index=index_name, id=appCode, body=appcode_detail)
+                    response = es.index(index=get_safe_index_name(), id=appCode, body=appcode_detail)
                 print(f"✓ Document {appCode} created: {response['result']}")
                 success_count += 1
                 
