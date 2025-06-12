@@ -530,40 +530,109 @@ def main(argv):
                 roles_type = type(appcode_detail["roles"])
                 if not isinstance(appcode_detail["roles"], dict):
                     print(f"Debug: Document {appCode} has roles of type {roles_type}: {appcode_detail['roles']}")
+            
+            # Search for existing compliance records with this appCode
+            search_query = {
+                "query": {
+                    "term": {
+                        "appCode.keyword": appCode
+                    }
+                }
+            }
+            
+            try:
+                # Try newer API first
+                search_response = es.search(index=get_safe_index_name(), body=search_query, size=1000)
+            except TypeError:
+                # Fall back if body parameter doesn't work
+                search_response = es.search(index=get_safe_index_name(), **search_query, size=1000)
+            
+            existing_records = search_response.get('hits', {}).get('hits', [])
+            
+            if existing_records:
+                # Update all existing compliance records for this appCode
+                updated_count = 0
+                for record in existing_records:
+                    record_id = record['_id']
                     
-            # Check if document exists
-            if es.exists(index=get_safe_index_name(), id=appCode):
-                # Update existing document by adding/merging new fields
-                try:
-                    # Try newer API first
-                    response = es.update(
-                        index=get_safe_index_name(), 
-                        id=appCode, 
-                        doc=appcode_detail,
-                        doc_as_upsert=True
-                    )
-                except TypeError:
-                    # Fall back to older API
-                    response = es.update(
-                        index=get_safe_index_name(), 
-                        id=appCode, 
-                        body={
-                            "doc": appcode_detail,
-                            "doc_as_upsert": True
-                        }
-                    )
-                print(f"✓ Document {appCode} updated: {response['result']}")
-                success_count += 1
+                    # Prepare the additional fields to add
+                    additional_fields = {
+                        "contactInfo": {
+                            "contactPerson": appcode_detail.get("contactPerson"),
+                            "contactType": appcode_detail.get("contactType"), 
+                            "contactMechanism": appcode_detail.get("contactMechanism"),
+                            "lineOfBusiness": appcode_detail.get("lineOfBusiness"),
+                            "applicationName": appcode_detail.get("name")
+                        },
+                        "roleAssignments": appcode_detail.get("roles", {}),
+                        "lastRoleUpdate": indexing_timestamp
+                    }
+                    
+                    try:
+                        # Update existing compliance record with additional fields
+                        try:
+                            # Try newer API first
+                            response = es.update(
+                                index=get_safe_index_name(),
+                                id=record_id,
+                                doc=additional_fields
+                            )
+                        except TypeError:
+                            # Fall back to older API
+                            response = es.update(
+                                index=get_safe_index_name(),
+                                id=record_id,
+                                body={"doc": additional_fields}
+                            )
+                        
+                        updated_count += 1
+                        print(f"✓ Updated compliance record {record_id} for appCode {appCode}")
+                        
+                    except Exception as update_error:
+                        print(f"✗ Error updating compliance record {record_id}: {update_error}")
+                        error_count += 1
+                        continue
+                
+                if updated_count > 0:
+                    print(f"✓ Updated {updated_count} compliance records for appCode {appCode}")
+                    success_count += updated_count
+                else:
+                    print(f"⚠ No compliance records were updated for appCode {appCode}")
+                    
             else:
-                # Create new document
+                # No existing compliance records found, create a reference document
+                print(f"⚠ No existing compliance records found for appCode {appCode}")
+                print(f"  Creating reference document for future matching...")
+                
+                reference_doc = {
+                    "appCode": appCode,
+                    "documentType": "roleReference",
+                    "contactInfo": {
+                        "contactPerson": appcode_detail.get("contactPerson"),
+                        "contactType": appcode_detail.get("contactType"),
+                        "contactMechanism": appcode_detail.get("contactMechanism"),
+                        "lineOfBusiness": appcode_detail.get("lineOfBusiness"),
+                        "applicationName": appcode_detail.get("name")
+                    },
+                    "roleAssignments": appcode_detail.get("roles", {}),
+                    "timestamp": indexing_timestamp,
+                    "note": "Reference document - will be merged when compliance data is available"
+                }
+                
                 try:
-                    # Try newer API first
-                    response = es.index(index=get_safe_index_name(), id=appCode, document=appcode_detail)
-                except TypeError:
-                    # Fall back to older API
-                    response = es.index(index=get_safe_index_name(), id=appCode, body=appcode_detail)
-                print(f"✓ Document {appCode} created: {response['result']}")
-                success_count += 1
+                    # Create reference document
+                    reference_id = f"{appCode}_roles_ref"
+                    try:
+                        response = es.index(index=get_safe_index_name(), id=reference_id, document=reference_doc)
+                    except TypeError:
+                        response = es.index(index=get_safe_index_name(), id=reference_id, body=reference_doc)
+                    
+                    print(f"✓ Created reference document {reference_id} for appCode {appCode}")
+                    success_count += 1
+                    
+                except Exception as ref_error:
+                    print(f"✗ Error creating reference document for {appCode}: {ref_error}")
+                    error_count += 1
                 
         except Exception as e:
             print(f"✗ Error processing document {appCode}: {e}")
