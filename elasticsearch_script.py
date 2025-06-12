@@ -250,10 +250,24 @@ def main(argv):
         print(f"Loaded {len(data)} records from JSON file")
         print(f"CHECKPOINT 3 - index_name type: {type(index_name)}, value: {index_name}")
         
+        # Debug: Show first few records of raw data
+        print("\n=== DEBUGGING RAW DATA ===")
+        print(f"Type of data: {type(data)}")
+        if isinstance(data, list) and len(data) > 0:
+            print(f"First record structure: {data[0]}")
+            print(f"Keys in first record: {list(data[0].keys()) if isinstance(data[0], dict) else 'Not a dict'}")
+        elif isinstance(data, dict):
+            print(f"Data is a dictionary with keys: {list(data.keys())}")
+        else:
+            print(f"Unexpected data type: {type(data)}")
+        
         # Process data through all transformation steps
-        print("Step 1: Transforming roles...")
+        print("\nStep 1: Transforming roles...")
         try:
             transformed_data = transform_roles(data)
+            print(f"After transform_roles: {len(transformed_data)} records")
+            if transformed_data and len(transformed_data) > 0:
+                print(f"Sample transformed record: {transformed_data[0]}")
         except Exception as e:
             print(f"Error in transform_roles: {e}")
             return
@@ -274,6 +288,7 @@ def main(argv):
                         formatted_data.append(item)
             else:
                 formatted_data = format_roles(transformed_data)
+            print(f"After format_roles: {len(formatted_data)} records")
         except Exception as e:
             print(f"Error in format_roles step: {e}")
             return
@@ -283,6 +298,7 @@ def main(argv):
         print("Step 3: Converting roles to objects...")
         try:
             final_data = transform_roles_obj(formatted_data)
+            print(f"After transform_roles_obj: {len(final_data)} records")
         except Exception as e:
             print(f"Error in transform_roles_obj: {e}")
             return
@@ -292,6 +308,7 @@ def main(argv):
         print("Step 4: Formatting fields for Elasticsearch...")
         try:
             final_data = format_fields_for_elasticsearch(final_data)
+            print(f"After format_fields_for_elasticsearch: {len(final_data)} records")
         except Exception as e:
             print(f"Error in format_fields_for_elasticsearch: {e}")
             return
@@ -314,7 +331,15 @@ def main(argv):
                 continue
         
         final_data = valid_data
-        print("Data transformation completed successfully")
+        print(f"Data transformation completed successfully. Final records: {len(final_data)}")
+        
+        # Debug: Show final data structure
+        if final_data and len(final_data) > 0:
+            print(f"Sample final record: {final_data[0]}")
+            print(f"Final record keys: {list(final_data[0].keys()) if isinstance(final_data[0], dict) else 'Not a dict'}")
+        else:
+            print("WARNING: No data to index! All records may have been filtered out.")
+            return
         
     except FileNotFoundError:
         print(f"Error: The file {json_file_path} was not found.")
@@ -482,13 +507,14 @@ def main(argv):
         return
         
     # Process documents for Elasticsearch
-    print("Starting Elasticsearch updates...")
+    print(f"Starting Elasticsearch updates for {len(final_data)} records...")
     indexing_timestamp = datetime.now().isoformat()
     
     success_count = 0
     error_count = 0
     
-    for appcode_detail in final_data:
+    for i, appcode_detail in enumerate(final_data):
+        print(f"Processing record {i+1}/{len(final_data)}: {appcode_detail.get('appCode', 'NO_APPCODE')}")
         if not appcode_detail.get("appCode"):
             print("Warning: Skipping record without appCode")
             error_count += 1
