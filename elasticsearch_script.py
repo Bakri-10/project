@@ -535,7 +535,7 @@ def main(argv):
             search_query = {
                 "query": {
                     "term": {
-                        "appCode.keyword": appCode
+                        "_source.appCode.keyword": appCode
                     }
                 }
             }
@@ -554,33 +554,53 @@ def main(argv):
                 updated_count = 0
                 for record in existing_records:
                     record_id = record['_id']
+                    existing_source = record.get('_source', {})
                     
-                    # Prepare the additional fields to add at root level
-                    additional_fields = {
+                    # Create fields object with the same structure as the compliance data
+                    fields = {}
+                    
+                    # Add new fields to both _source and fields
+                    new_fields = {
                         "name": appcode_detail.get("name"),
                         "lineOfBusiness": appcode_detail.get("lineOfBusiness"),
                         "contactPerson": appcode_detail.get("contactPerson"),
                         "contactType": appcode_detail.get("contactType"),
                         "contactMechanism": appcode_detail.get("contactMechanism"),
-                        "roles": appcode_detail.get("roles", {}),
-                        "lastRoleUpdate": indexing_timestamp
+                        "roles": appcode_detail.get("roles", {})
+                    }
+                    
+                    # Add each field to both _source and fields sections
+                    for field_name, field_value in new_fields.items():
+                        if field_value:  # Only add non-empty fields
+                            # Add to _source
+                            existing_source[field_name] = field_value
+                            
+                            # Add to fields with .keyword for string fields
+                            if isinstance(field_value, str):
+                                fields[f"{field_name}.keyword"] = [field_value]
+                                fields[field_name] = [field_value]
+                            elif isinstance(field_value, dict):  # For roles
+                                fields[field_name] = [field_value]
+                    
+                    # Prepare the update document
+                    update_doc = {
+                        "_source": existing_source,
+                        "fields": fields
                     }
                     
                     try:
-                        # Update existing compliance record with additional fields
+                        # Update the document
                         try:
-                            # Try newer API first
                             response = es.update(
                                 index=get_safe_index_name(),
                                 id=record_id,
-                                doc=additional_fields
+                                doc=update_doc
                             )
                         except TypeError:
-                            # Fall back to older API
                             response = es.update(
                                 index=get_safe_index_name(),
                                 id=record_id,
-                                body={"doc": additional_fields}
+                                body={"doc": update_doc}
                             )
                         
                         updated_count += 1
@@ -596,39 +616,8 @@ def main(argv):
                     success_count += updated_count
                 else:
                     print(f"⚠ No compliance records were updated for appCode {appCode}")
-                    
             else:
-                # No existing compliance records found, create a reference document
-                print(f"⚠ No existing compliance records found for appCode {appCode}")
-                print(f"  Creating reference document for future matching...")
-                
-                reference_doc = {
-                    "appCode": appCode,
-                    "documentType": "roleReference",
-                    "name": appcode_detail.get("name"),
-                    "lineOfBusiness": appcode_detail.get("lineOfBusiness"),
-                    "contactPerson": appcode_detail.get("contactPerson"),
-                    "contactType": appcode_detail.get("contactType"),
-                    "contactMechanism": appcode_detail.get("contactMechanism"),
-                    "roles": appcode_detail.get("roles", {}),
-                    "timestamp": indexing_timestamp,
-                    "note": "Reference document - will be merged when compliance data is available"
-                }
-                
-                try:
-                    # Create reference document
-                    reference_id = f"{appCode}_roles_ref"
-                    try:
-                        response = es.index(index=get_safe_index_name(), id=reference_id, document=reference_doc)
-                    except TypeError:
-                        response = es.index(index=get_safe_index_name(), id=reference_id, body=reference_doc)
-                    
-                    print(f"✓ Created reference document {reference_id} for appCode {appCode}")
-                    success_count += 1
-                    
-                except Exception as ref_error:
-                    print(f"✗ Error creating reference document for {appCode}: {ref_error}")
-                    error_count += 1
+                print(f"⚠ No existing compliance records found for appCode {appCode}, skipping...")
                 
         except Exception as e:
             print(f"✗ Error processing document {appCode}: {e}")
