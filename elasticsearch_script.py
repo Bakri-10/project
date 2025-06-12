@@ -555,16 +555,14 @@ def main(argv):
                 for record in existing_records:
                     record_id = record['_id']
                     
-                    # Prepare the additional fields to add
+                    # Prepare the additional fields to add at root level
                     additional_fields = {
-                        "contactInfo": {
-                            "contactPerson": appcode_detail.get("contactPerson"),
-                            "contactType": appcode_detail.get("contactType"), 
-                            "contactMechanism": appcode_detail.get("contactMechanism"),
-                            "lineOfBusiness": appcode_detail.get("lineOfBusiness"),
-                            "applicationName": appcode_detail.get("name")
-                        },
-                        "roleAssignments": appcode_detail.get("roles", {}),
+                        "name": appcode_detail.get("name"),
+                        "lineOfBusiness": appcode_detail.get("lineOfBusiness"),
+                        "contactPerson": appcode_detail.get("contactPerson"),
+                        "contactType": appcode_detail.get("contactType"),
+                        "contactMechanism": appcode_detail.get("contactMechanism"),
+                        "roles": appcode_detail.get("roles", {}),
                         "lastRoleUpdate": indexing_timestamp
                     }
                     
@@ -607,14 +605,12 @@ def main(argv):
                 reference_doc = {
                     "appCode": appCode,
                     "documentType": "roleReference",
-                    "contactInfo": {
-                        "contactPerson": appcode_detail.get("contactPerson"),
-                        "contactType": appcode_detail.get("contactType"),
-                        "contactMechanism": appcode_detail.get("contactMechanism"),
-                        "lineOfBusiness": appcode_detail.get("lineOfBusiness"),
-                        "applicationName": appcode_detail.get("name")
-                    },
-                    "roleAssignments": appcode_detail.get("roles", {}),
+                    "name": appcode_detail.get("name"),
+                    "lineOfBusiness": appcode_detail.get("lineOfBusiness"),
+                    "contactPerson": appcode_detail.get("contactPerson"),
+                    "contactType": appcode_detail.get("contactType"),
+                    "contactMechanism": appcode_detail.get("contactMechanism"),
+                    "roles": appcode_detail.get("roles", {}),
                     "timestamp": indexing_timestamp,
                     "note": "Reference document - will be merged when compliance data is available"
                 }
