@@ -170,6 +170,25 @@ def main(argv):
     print(f"  json_file_path: {type(json_file_path)} = {json_file_path}")
     print(f"  index_name: {type(index_name)} = {index_name}")
     
+    # Clean up other arguments if they contain dictionary data
+    def extract_clean_value(arg_name, arg_value):
+        if isinstance(arg_value, str) and ('{' in arg_value or 'es_url' in arg_value):
+            print(f"Cleaning malformed argument {arg_name}: {arg_value}")
+            # For es_url, extract the actual URL
+            if arg_name == 'es_url' and 'https://' in arg_value:
+                import re
+                url_match = re.search(r'https://[^,}\s\'\"]+', arg_value)
+                if url_match:
+                    cleaned = url_match.group(0)
+                    print(f"Extracted clean {arg_name}: {cleaned}")
+                    return cleaned
+        return arg_value
+    
+    # Clean up arguments
+    es_url = extract_clean_value('es_url', es_url)
+    es_service_id = extract_clean_value('es_service_id', es_service_id)
+    json_file_path = extract_clean_value('json_file_path', json_file_path)
+    
     # Debug: Show what we received
     print(f"Debug - Raw arguments received:")
     print(f"  es_url type: {type(es_url)} = {es_url}")
@@ -183,23 +202,40 @@ def main(argv):
         return
     
     # Check if index_name looks like a dictionary string and try to parse it
-    if index_name.startswith('{') or 'server_compliance_metrics_index:' in index_name:
+    if index_name.startswith('{') or 'server_compliance_metrics_index' in index_name:
         print(f"Index name appears to contain dictionary data: {index_name}")
         
         # Try to extract the actual index name from common patterns
         import re
         
-        # Look for patterns like "server_compliance_metrics_index: some-index-name"
-        match = re.search(r'server_compliance_metrics_index[:\s]+([a-zA-Z0-9_.-]+)', index_name)
-        if match:
-            extracted_name = match.group(1).strip().rstrip(',').rstrip('}').strip("'\"")
-            print(f"Extracted index name from pattern: {extracted_name}")
+        # Clean up the string first - remove backslashes and quotes
+        cleaned_string = index_name.replace('\\', '').replace('"', '').replace("'", "")
+        print(f"Cleaned string: {cleaned_string}")
+        
+        # Look for patterns like "server_compliance_metrics_index: some-index-name" or similar
+        patterns = [
+            r'server_compliance_metrics_index[:\s]*([a-zA-Z0-9_.-]+)',
+            r'atu0-server-compliance-metrics',
+            r'[a-z0-9]+-server-compliance-[a-z0-9]+'
+        ]
+        
+        extracted_name = None
+        for pattern in patterns:
+            match = re.search(pattern, cleaned_string, re.IGNORECASE)
+            if match:
+                if match.groups():
+                    extracted_name = match.group(1).strip().rstrip(',').rstrip('}')
+                else:
+                    extracted_name = match.group(0).strip().rstrip(',').rstrip('}')
+                print(f"Extracted index name using pattern '{pattern}': {extracted_name}")
+                break
+        
+        if extracted_name:
             index_name = extracted_name
         else:
-            # Try to find any valid index-like string
-            # Look for patterns that might be index names
-            potential_indices = re.findall(r'[a-z][a-z0-9_.-]*', index_name.lower())
-            valid_indices = [idx for idx in potential_indices if len(idx) > 3 and 'compliance' in idx]
+            # Last resort - try to find any valid index-like string
+            potential_indices = re.findall(r'[a-z][a-z0-9_.-]*', cleaned_string.lower())
+            valid_indices = [idx for idx in potential_indices if len(idx) > 5 and ('compliance' in idx or 'server' in idx)]
             
             if valid_indices:
                 index_name = valid_indices[0]
@@ -207,6 +243,7 @@ def main(argv):
             else:
                 print("Cannot extract a valid index name from the provided string.")
                 print("Please check your Ansible playbook variable expansion.")
+                print(f"Available potential matches: {potential_indices}")
                 return
     
     # Additional safety check - ensure it's still a string after extraction
@@ -604,23 +641,23 @@ def main(argv):
                             )
                         
                         updated_count += 1
-                        print(f"✓ Updated compliance record {record_id} for appCode {appCode}")
+                        print(f"SUCCESS: Updated compliance record {record_id} for appCode {appCode}")
                         
                     except Exception as update_error:
-                        print(f"✗ Error updating compliance record {record_id}: {update_error}")
+                        print(f"ERROR: Error updating compliance record {record_id}: {update_error}")
                         error_count += 1
                         continue
                 
                 if updated_count > 0:
-                    print(f"✓ Updated {updated_count} compliance records for appCode {appCode}")
+                    print(f"SUCCESS: Updated {updated_count} compliance records for appCode {appCode}")
                     success_count += updated_count
                 else:
-                    print(f"⚠ No compliance records were updated for appCode {appCode}")
+                    print(f"WARNING: No compliance records were updated for appCode {appCode}")
             else:
-                print(f"⚠ No existing compliance records found for appCode {appCode}, skipping...")
+                print(f"WARNING: No existing compliance records found for appCode {appCode}, skipping...")
                 
         except Exception as e:
-            print(f"✗ Error processing document {appCode}: {e}")
+            print(f"ERROR: Error processing document {appCode}: {e}")
             print(f"   Document structure: {appcode_detail}")
             error_count += 1
             
@@ -631,9 +668,9 @@ def main(argv):
     print(f"Total records: {len(final_data)}")
     
     if error_count == 0:
-        print("✓ All updates completed successfully!")
+        print("SUCCESS: All updates completed successfully!")
     else:
-        print(f"⚠ Completed with {error_count} errors")
+        print(f"WARNING: Completed with {error_count} errors")
 
 if __name__ == '__main__':
     main(sys.argv[1:]) 
