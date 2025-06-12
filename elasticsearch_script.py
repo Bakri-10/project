@@ -568,11 +568,11 @@ def main(argv):
                 if not isinstance(appcode_detail["roles"], dict):
                     print(f"Debug: Document {appCode} has roles of type {roles_type}: {appcode_detail['roles']}")
             
-            # Search for existing compliance records with this appCode
+            # Search for existing compliance records with this appCode using the fields array format
             search_query = {
                 "query": {
                     "term": {
-                        "_source.appCode.keyword": appCode
+                        "fields.appCode": appCode
                     }
                 }
             }
@@ -587,16 +587,20 @@ def main(argv):
             existing_records = search_response.get('hits', {}).get('hits', [])
             
             if existing_records:
+                print(f"Found {len(existing_records)} existing records for appCode {appCode}")
+            else:
+                print(f"No existing compliance records found for appCode {appCode}")
+            
+            if existing_records:
                 # Update all existing compliance records for this appCode
                 updated_count = 0
                 for record in existing_records:
                     record_id = record['_id']
-                    existing_source = record.get('_source', {})
                     
                     # Create fields object with the same structure as the compliance data
                     fields = {}
                     
-                    # Add new fields to both _source and fields
+                    # Add new fields only to fields section
                     new_fields = {
                         "name": appcode_detail.get("name"),
                         "lineOfBusiness": appcode_detail.get("lineOfBusiness"),
@@ -606,12 +610,9 @@ def main(argv):
                         "roles": appcode_detail.get("roles", {})
                     }
                     
-                    # Add each field to both _source and fields sections
+                    # Add each field to fields section only
                     for field_name, field_value in new_fields.items():
                         if field_value:  # Only add non-empty fields
-                            # Add to _source
-                            existing_source[field_name] = field_value
-                            
                             # Add to fields with .keyword for string fields
                             if isinstance(field_value, str):
                                 fields[f"{field_name}.keyword"] = [field_value]
@@ -619,9 +620,8 @@ def main(argv):
                             elif isinstance(field_value, dict):  # For roles
                                 fields[field_name] = [field_value]
                     
-                    # Prepare the update document
+                    # Prepare the update document - only update fields
                     update_doc = {
-                        "_source": existing_source,
                         "fields": fields
                     }
                     
