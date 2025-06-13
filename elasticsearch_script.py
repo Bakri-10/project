@@ -568,14 +568,29 @@ def main(argv):
                 if not isinstance(appcode_detail["roles"], dict):
                     print(f"Debug: Document {appCode} has roles of type {roles_type}: {appcode_detail['roles']}")
             
-            # Search for existing compliance records with this appCode using the fields array format
+            # Search for existing compliance records with this appCode using multiple field approaches
+            # Try multiple query approaches since appCode can be in different locations
             search_query = {
                 "query": {
-                    "term": {
-                        "fields.appCode": appCode
+                    "bool": {
+                        "should": [
+                            # Search in _source.appCode
+                            {"term": {"appCode": appCode}},
+                            {"term": {"appCode.keyword": appCode}},
+                            # Search in fields.appCode (array)
+                            {"term": {"fields.appCode": appCode}},
+                            {"term": {"fields.appCode.keyword": appCode}},
+                            # Search in _source for documents with this structure
+                            {"term": {"_source.appCode": appCode}},
+                            {"term": {"_source.appCode.keyword": appCode}}
+                        ],
+                        "minimum_should_match": 1
                     }
                 }
             }
+            
+            # Debug: Print the search query being used
+            print(f"Debug: Searching for appCode '{appCode}' with query: {json.dumps(search_query, indent=2)}")
             
             try:
                 # Try newer API first
@@ -584,12 +599,44 @@ def main(argv):
                 # Fall back if body parameter doesn't work
                 search_response = es.search(index=get_safe_index_name(), **search_query, size=1000)
             
+            # Debug: Print search response details
+            total_hits = search_response.get('hits', {}).get('total', {})
+            if isinstance(total_hits, dict):
+                total_count = total_hits.get('value', 0)
+            else:
+                total_count = total_hits  # For older ES versions
+            
+            print(f"Debug: Search returned {total_count} total hits")
+            
             existing_records = search_response.get('hits', {}).get('hits', [])
             
             if existing_records:
                 print(f"Found {len(existing_records)} existing records for appCode {appCode}")
+                # Debug: Show the first record structure
+                if len(existing_records) > 0:
+                    first_record = existing_records[0]
+                    print(f"Debug: First record ID: {first_record.get('_id')}")
+                    print(f"Debug: First record source appCode: {first_record.get('_source', {}).get('appCode')}")
+                    if 'fields' in first_record:
+                        print(f"Debug: First record fields.appCode: {first_record.get('fields', {}).get('appCode')}")
             else:
                 print(f"No existing compliance records found for appCode {appCode}")
+                # Debug: Let's try a simple match_all query to see what records exist
+                debug_query = {"query": {"match_all": {}}}
+                try:
+                    debug_response = es.search(index=get_safe_index_name(), body=debug_query, size=5)
+                    debug_records = debug_response.get('hits', {}).get('hits', [])
+                    print(f"Debug: Found {len(debug_records)} total records in index")
+                    if debug_records:
+                        sample_record = debug_records[0]
+                        print(f"Debug: Sample record structure:")
+                        print(f"  - _source keys: {list(sample_record.get('_source', {}).keys())}")
+                        print(f"  - fields keys: {list(sample_record.get('fields', {}).keys()) if 'fields' in sample_record else 'No fields'}")
+                        print(f"  - Sample appCode in _source: {sample_record.get('_source', {}).get('appCode')}")
+                        if 'fields' in sample_record:
+                            print(f"  - Sample appCode in fields: {sample_record.get('fields', {}).get('appCode')}")
+                except Exception as debug_error:
+                    print(f"Debug query failed: {debug_error}")
             
             if existing_records:
                 # Update all existing compliance records for this appCode
