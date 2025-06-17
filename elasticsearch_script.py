@@ -545,10 +545,43 @@ def main(argv):
         
     # Process documents for Elasticsearch
     print(f"Starting Elasticsearch updates for {len(final_data)} records...")
+    print(f"Target index: {get_safe_index_name()}")
     indexing_timestamp = datetime.now().isoformat()
     
     success_count = 0
     error_count = 0
+    
+    # First, let's check what's currently in the index
+    try:
+        total_docs_query = {"query": {"match_all": {}}}
+        try:
+            count_response = es.count(index=get_safe_index_name(), body=total_docs_query)
+        except TypeError:
+            count_response = es.count(index=get_safe_index_name(), **total_docs_query)
+        
+        total_docs = count_response.get('count', 0)
+        print(f"Current documents in index: {total_docs}")
+        
+        # Show a sample of existing documents with appCode
+        if total_docs > 0:
+            sample_query = {
+                "query": {"exists": {"field": "appCode"}},
+                "size": 3,
+                "_source": ["appCode", "name", "affectedItemName", "documentType"]
+            }
+            try:
+                sample_response = es.search(index=get_safe_index_name(), body=sample_query)
+            except TypeError:
+                sample_response = es.search(index=get_safe_index_name(), **sample_query)
+            
+            sample_docs = sample_response.get('hits', {}).get('hits', [])
+            print(f"Sample existing documents with appCode:")
+            for doc in sample_docs:
+                source = doc.get('_source', {})
+                print(f"  - ID: {doc.get('_id')}, appCode: {source.get('appCode')}, name: {source.get('name', 'N/A')}, type: {source.get('documentType', 'compliance')}")
+    except Exception as e:
+        print(f"Could not check existing documents: {e}")
+        print("Proceeding with updates anyway...")
     
     for i, appcode_detail in enumerate(final_data):
         print(f"Processing record {i+1}/{len(final_data)}: {appcode_detail.get('appCode', 'NO_APPCODE')}")
@@ -568,21 +601,26 @@ def main(argv):
                 if not isinstance(appcode_detail["roles"], dict):
                     print(f"Debug: Document {appCode} has roles of type {roles_type}: {appcode_detail['roles']}")
             
-            # Search for existing compliance records with this appCode using multiple field approaches
-            # Try multiple query approaches since appCode can be in different locations
+            # Search for existing compliance records with this appCode
+            # Use a simpler, more reliable query that focuses on the _source appCode field
             search_query = {
                 "query": {
                     "bool": {
                         "should": [
-                            # Search in _source.appCode
-                            {"term": {"appCode": appCode}},
+                            # Primary search in _source.appCode using exact match
                             {"term": {"appCode.keyword": appCode}},
-                            # Search in fields.appCode (array)
-                            {"term": {"fields.appCode": appCode}},
-                            {"term": {"fields.appCode.keyword": appCode}},
-                            # Search in _source for documents with this structure
-                            {"term": {"_source.appCode": appCode}},
-                            {"term": {"_source.appCode.keyword": appCode}}
+                            {"term": {"appCode": appCode}},
+                            # Also exclude documents that are just application metadata
+                            {"bool": {
+                                "must": [
+                                    {"term": {"appCode.keyword": appCode}},
+                                    {"bool": {
+                                        "must_not": [
+                                            {"term": {"documentType.keyword": "application_metadata"}}
+                                        ]
+                                    }}
+                                ]
+                            }}
                         ],
                         "minimum_should_match": 1
                     }
@@ -644,47 +682,39 @@ def main(argv):
                 for record in existing_records:
                     record_id = record['_id']
                     
-                    # Create fields object with the same structure as the compliance data
-                    fields = {}
+                    # Get the existing source document
+                    existing_source = record.get('_source', {})
                     
-                    # Add new fields only to fields section
-                    new_fields = {
+                    # Merge new application data into existing source
+                    updated_source = existing_source.copy()
+                    
+                    # Add/update application metadata in _source
+                    updated_source.update({
                         "name": appcode_detail.get("name"),
                         "lineOfBusiness": appcode_detail.get("lineOfBusiness"),
                         "contactPerson": appcode_detail.get("contactPerson"),
                         "contactType": appcode_detail.get("contactType"),
                         "contactMechanism": appcode_detail.get("contactMechanism"),
-                        "roles": appcode_detail.get("roles", {})
-                    }
+                        "roles": appcode_detail.get("roles", {}),
+                        "timestamp": indexing_timestamp  # Update timestamp
+                    })
                     
-                    # Add each field to fields section only
-                    for field_name, field_value in new_fields.items():
-                        if field_value:  # Only add non-empty fields
-                            # Add to fields with .keyword for string fields
-                            if isinstance(field_value, str):
-                                fields[f"{field_name}.keyword"] = [field_value]
-                                fields[field_name] = [field_value]
-                            elif isinstance(field_value, dict):  # For roles
-                                fields[field_name] = [field_value]
-                    
-                    # Prepare the update document - only update fields
-                    update_doc = {
-                        "fields": fields
-                    }
+                    # Remove any None values
+                    updated_source = {k: v for k, v in updated_source.items() if v is not None}
                     
                     try:
-                        # Update the document
+                        # Update the entire document source
                         try:
                             response = es.update(
                                 index=get_safe_index_name(),
                                 id=record_id,
-                                doc=update_doc
+                                doc=updated_source
                             )
                         except TypeError:
                             response = es.update(
                                 index=get_safe_index_name(),
                                 id=record_id,
-                                body={"doc": update_doc}
+                                body={"doc": updated_source}
                             )
                         
                         updated_count += 1
@@ -701,7 +731,44 @@ def main(argv):
                 else:
                     print(f"WARNING: No compliance records were updated for appCode {appCode}")
             else:
-                print(f"WARNING: No existing compliance records found for appCode {appCode}, skipping...")
+                # No existing records found - create a new document with the application data
+                print(f"Creating new document for appCode {appCode} since no existing compliance records found")
+                
+                # Create a new document with application metadata
+                new_document = {
+                    "appCode": appCode,
+                    "name": appcode_detail.get("name"),
+                    "lineOfBusiness": appcode_detail.get("lineOfBusiness"),
+                    "contactPerson": appcode_detail.get("contactPerson"),
+                    "contactType": appcode_detail.get("contactType"),
+                    "contactMechanism": appcode_detail.get("contactMechanism"),
+                    "roles": appcode_detail.get("roles", {}),
+                    "timestamp": indexing_timestamp,
+                    "documentType": "application_metadata"  # To distinguish from compliance records
+                }
+                
+                # Remove any None values
+                new_document = {k: v for k, v in new_document.items() if v is not None}
+                
+                try:
+                    # Index the new document
+                    try:
+                        response = es.index(
+                            index=get_safe_index_name(),
+                            document=new_document
+                        )
+                    except TypeError:
+                        response = es.index(
+                            index=get_safe_index_name(),
+                            body=new_document
+                        )
+                    
+                    print(f"SUCCESS: Created new document for appCode {appCode} with ID: {response.get('_id')}")
+                    success_count += 1
+                    
+                except Exception as create_error:
+                    print(f"ERROR: Error creating new document for appCode {appCode}: {create_error}")
+                    error_count += 1
                 
         except Exception as e:
             print(f"ERROR: Error processing document {appCode}: {e}")
