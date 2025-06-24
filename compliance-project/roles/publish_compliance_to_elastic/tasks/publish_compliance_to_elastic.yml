@@ -1,0 +1,19 @@
+---
+- name: Block to execute python script to push compliance data to elastic
+  block:
+  - name: Execute python script to publish Compliance data to elastic index
+    ansible.builtin.script: "{{ playbook_dir }}/files/elasticsearch_script.py --es-url '{{ es_url }}' --es-service-id '{{ es_service_id }}' --es-password '{{ es_service_id_password }}' --json-file-path '{{ playbook_dir }}/app_data_input.json' --compliance-index-name '{{ server_compliance_metrics_index }}' --iipm-index-name '{{ iipm_index_name }}'"
+    args:
+      executable: python
+    environment:
+      PYTHONPATH: "{{ playbook_dir }}/files"
+    register: compliance_response
+
+  - name: Debug python response
+    ansible.builtin.debug:
+      msg: "{{ compliance_response.stdout }}"
+
+  rescue:
+  - name: Fail playbook if push to elastic fails
+    ansible.builtin.fail:
+      msg: Failed to push compliance data to elastic

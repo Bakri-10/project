@@ -1,0 +1,98 @@
+---
+- name: Server Compliance Reporting
+  hosts: localhost
+  vars:
+    secrets:
+    - namespace: chorus_client_id
+      app_code: "{{ survey_appcode | upper }}"
+      vault_env: "{{ vault_environment }}"
+      vault_secret_path: "AAP/CHORUS_CLIENT_ID"
+    - namespace: chorus_service_id
+      app_code: "{{ survey_appcode | upper }}"
+      vault_env: "{{ vault_environment }}"
+      vault_secret_path: "AAP/CHORUS_SERVICE_ID"
+    - namespace: es_write
+      app_code: "{{ survey_appcode | upper }}"
+      vault_env: "{{ vault_environment }}"
+      vault_secret_path: "AAP/ES_WRITE"
+    - namespace: vault_extravars
+      app_code: "{{ survey_appcode | upper }}"
+      vault_env: "{{ vault_environment }}"
+      vault_secret_path: "AAP/server_compliance_reporting/extra_vars"
+  roles:
+  - { role: rbc_common.hashicorp_vault.vault_init }
+
+  tasks:
+  - name: Debug
+    ansible.builtin.debug:
+      msg: debug
+
+  - name: Assign secrets to dedicated variables
+    ansible.builtin.set_fact:
+      chorus_clientid: "{{ vault[vault_environment].chorus_client_id.username }}"
+      chorus_clientid_secret: "{{ vault[vault_environment].chorus_client_id.password }}"
+      chorus_service_id: "{{ vault[vault_environment].chorus_service_id.username }}"
+      chorus_service_id_password: "{{ vault[vault_environment].chorus_service_id.password }}"
+      es_service_id: "{{ vault[vault_environment].es_write.username }}"
+      es_service_id_password: "{{ vault[vault_environment].es_write.password }}"
+
+  - name: Assign extra vars to dedicated variables
+    ansible.builtin.set_fact:
+      to: "{{ vault[vault_environment].vault_extravars.to }}"
+      es_url: "{{ vault[vault_environment].vault_extravars.es_url }}"
+      server_compliance_metrics_index: "{{ vault[vault_environment].vault_extravars.server_compliance_metrics_index }}"
+      iipm_index_name: "{{ vault[vault_environment].vault_extravars.iipm_index_name }}"
+
+    no_log: true
+
+  - name: Block for calling the chorus compliance reporting API role
+    block:
+    - name: Calling Chorus API role
+      ansible.builtin.include_role:
+        name: chorus_compliance_reporting
+    rescue:
+    - name: Fail playbook if chorus compliance reporting api call fails
+      ansible.builtin.fail:
+        msg: Failed to retrieve the data from chorus api
+
+  - name: Installing elastic module
+    ansible.builtin.pip:
+      name: elasticsearch==8.17.2
+      state: present
+
+  - name: Block to publish data to elastic
+    block:
+    - name: Publish data to elastic
+      ansible.builtin.include_role:
+        name: publish_to_elastic
+    rescue:
+    - name: Fail playbook if push to elastic fails
+      ansible.builtin.fail:
+        msg: Failed to push data to elastic
+
+  - name: Block for calling the compliance data enrichment
+    block:
+    - name: Calling compliance enrichment role
+      ansible.builtin.include_role:
+        name: publish_compliance_to_elastic
+    rescue:
+    - name: Fail playbook if compliance enrichment fails
+      ansible.builtin.fail:
+        msg: Failed to enrich compliance data with IIPM
+
+  - name: Send notification upon data successfully indexed
+    ansible.builtin.include_role:
+      name: rbc_sfmo.components.email
+    vars:
+      appcode: "{{ survey_appcode | upper }}"
+      email_to: "{{ to }}"
+      email_cc: []
+      email_subject: "ATU0 - Server Compliance Reporting Data Indexed Successfully"
+      email_body: |
+        Hello,
+
+        Server Compliance Reporting Data successfully indexed.
+
+        For results visit https://{{aap_domain}}/#/jobs/playbook/{{awx_job_id}}/output"
+
+        Thanks. 
