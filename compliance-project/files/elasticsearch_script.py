@@ -36,18 +36,6 @@ def fetch_iipm_data(es, iipm_index_name):
     except Exception as e:
         print(f"Error fetching IIPM data: {e}")
         return None
-    
-def clean_data(item):
-    """Clean invalid fields in the item."""
-    for key, value in item.items():
-        # Check for NaN as a float
-        if isinstance(value, float) and math.isnan(value):
-            item[key] = None  # Replace NaN with None
-        
-        # Check for NaN as a string
-        if isinstance(value, str) and value.lower() == "nan":
-            item[key] = None  # Replace "NaN" string with None
-    return item
 
 def create_iipm_lookup(iipm_data):
     """Create a lookup dictionary """
@@ -86,89 +74,6 @@ def create_iipm_lookup(iipm_data):
     }
     return iipm_data_lookup_dict
 
-def initialize_elasticsearch(es_url, es_service_id, es_password):
-    """
-    Initializes an Elasticsearch client with the provided credentials.
-    
-    Args:
-        es_url (str): The Elasticsearch URL.
-        es_service_id (str): The service ID for authentication.
-        es_password (str): The password for authentication.
-    
-    Returns:
-        Elasticsearch: An instance of the Elasticsearch client, or None if an error occurs.
-    """
-    try:
-        es = Elasticsearch(
-            [es_url],
-            http_auth=HTTPBasicAuth(es_service_id, es_password),
-            node_class='requests'
-        )
-        return es
-    except Exception as e:
-        print(f"Error initializing Elasticsearch: {e}")
-        return None
-
-def load_json_file(json_file_path):
-    """
-    Loads JSON data from a file.
-    
-    Args:
-        json_file_path (str): The path to the compliance data JSON file.
-    
-    Returns:
-        dict: The loaded compliance JSON data as a dictionary, or None if an error occurs.
-    """
-    try:
-        with open(json_file_path) as file:
-            compliance_data = json.load(file)
-        return compliance_data
-    except json.JSONDecodeError as e:
-        print(f"Error loading JSON data: {e}")
-        return None
-    except FileNotFoundError as e:
-        print(f"File not found: {e}")
-        return None
-
-def enrich_and_update_compliance_data(es, compliance_data, iipm_lookup, compliance_index_name):
-    """
-    Enriches compliance data with IIPM data and updates the Elasticsearch index.
-    
-    Args:
-        es (Elasticsearch): The Elasticsearch client.
-        compliance_data (list): The list of compliance data.
-        iipm_lookup (dict): The lookup dictionary for IIPM data.
-        compliance_index_name (str): The name of the Elasticsearch index to update.
-    """
-    indexing_timestamp = datetime.now()
-    for item in compliance_data:
-        compliance_id = item.get("complianceId")  # Use complianceId instead of Finding ID
-        app_code = item.get("appCode", "N/A")
-        
-        if not compliance_id:
-            print("Skipping record without a valid 'complianceId'")
-            continue
-            
-        item = clean_data(item) 
-        item["timestamp"] = indexing_timestamp
-        
-        # Enrich with IIPM data if available
-        if app_code and app_code in iipm_lookup:
-            item["iipm"] = iipm_lookup[app_code]
-        
-        try:
-            es.update(
-                index=compliance_index_name,
-                id=compliance_id,  # Use compliance_id as document ID
-                body={
-                    "doc": item,
-                    "doc_as_upsert": True
-                }
-            )
-            print(f"Successfully updated/created record for complianceId: {compliance_id}")
-        except Exception as e:
-            print(f"Error updating/creating record with complianceId {compliance_id}: {e}")
-
 def main(argv):
     args = parse_arguments()
     es_url = args.es_url
@@ -178,24 +83,58 @@ def main(argv):
     compliance_index_name = args.compliance_index_name
     iipm_index_name = args.iipm_index_name
 
-    compliance_data = load_json_file(json_file_path)
-    if compliance_data is None:
-        print("Failed to load compliance data. Exiting.")
-        sys.exit(1)
+    try:
+        with open(json_file_path) as file:
+            data = json.load(file)
+    except json.JSONDecodeError as e:
+        print(f"Error loading JSON data: {e}")
+        return
     
-    es = initialize_elasticsearch(es_url, es_service_id, es_password)
-    if es is None:
-        print("Failed to initialize Elasticsearch client. Exiting.")
-        sys.exit(1)
+    es = Elasticsearch(
+        [es_url],
+        http_auth=HTTPBasicAuth(es_service_id, es_password),
+        node_class='requests'
+    )
     
+    # Create index if it doesn't exist (following sample pattern)
+    if not es.indices.exists(index=compliance_index_name):
+        es.indices.create(index=compliance_index_name)
+        print(f"Index '{compliance_index_name}' created.")
+    
+    # Fetch IIPM data for enrichment
     iipm_data = fetch_iipm_data(es, iipm_index_name)
-    if iipm_data is None:
-        print("Failed to fetch IIPM data. Exiting.")
-        sys.exit(1)
+    iipm_lookup = {}
+    if iipm_data:
+        iipm_lookup = create_iipm_lookup(iipm_data)
     
-    iipm_lookup = create_iipm_lookup(iipm_data)
-    enrich_and_update_compliance_data(es, compliance_data, iipm_lookup, compliance_index_name)
-    print("Compliance data enrichment completed successfully.")
+    indexing_timestamp = datetime.now()
+    actions = []
+    
+    # Process compliance data (assuming it's a list, not nested under "results")
+    compliance_data = data if isinstance(data, list) else data.get("results", [])
+    
+    for item in compliance_data:
+        item["timestamp"] = indexing_timestamp
+        
+        # Enrich with IIPM data if available
+        app_code = item.get("appCode")
+        if app_code and app_code in iipm_lookup:
+            item["contact-info"] = iipm_lookup[app_code]
+        
+        actions.append({
+            "_index": compliance_index_name,
+            "_source": item
+        })
+    
+    if actions:
+        try:
+            helpers.bulk(es, actions)
+            print(len(actions))  # testing - to be removed.
+            print("Data successfully indexed.")
+        except Exception as e:
+            print(f"Error indexing data: {e}")
+    else:
+        print(f"No actions to index.")
 
 if __name__ == '__main__':
     main(sys.argv[1:]) 
