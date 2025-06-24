@@ -29,13 +29,13 @@ def fetch_iipm_data(es, iipm_index_name):
                 }
             }
         }
-        response = es.search(index=iipm_index_name, body=query, size=10000)
+        response = es.search(index=iipm_index_name, **query, size=10000)
         if not response['hits']['hits']:
             raise ValueError(f"No data found in the IIPM index: {iipm_index_name}")
         return response
     except Exception as e:
         print(f"Error fetching IIPM data: {e}")
-        return
+        return None
     
 def clean_data(item):
     """Clean invalid fields in the item."""
@@ -65,6 +65,7 @@ def create_iipm_lookup(iipm_data):
                 "appCustodianId": source.get("roles", {}).get("IT_CUSTODIAN", {}).get("id"),
                 "app_custodian_name": source.get("app_custodian_name")
             }
+    # For "Multiple App Codes Selected" or "No App Code Selected", set the values to "Unknown"
     iipm_data_lookup_dict["Multiple App Codes Selected"] = {
         "name": "Unknown",
         "lineOfBusiness": "Unknown",
@@ -141,15 +142,11 @@ def enrich_and_update_compliance_data(es, compliance_data, iipm_lookup, complian
     """
     indexing_timestamp = datetime.now()
     for item in compliance_data:
+        compliance_id = item.get("complianceId")  # Use complianceId instead of Finding ID
         app_code = item.get("appCode", "N/A")
-        name = item.get("name", "N/A")
-        line_of_business = item.get("lineOfBusiness", "N/A")
-        contact_person = item.get("contactPerson", "N/A")
-        contact_type = item.get("contactType", "N/A")
-        contact_mechanism = item.get("contactMechanism", "N/A")
         
-        if not app_code or app_code == "N/A":
-            print("Skipping record without a valid 'appCode'")
+        if not compliance_id:
+            print("Skipping record without a valid 'complianceId'")
             continue
             
         item = clean_data(item) 
@@ -162,15 +159,15 @@ def enrich_and_update_compliance_data(es, compliance_data, iipm_lookup, complian
         try:
             es.update(
                 index=compliance_index_name,
-                id=app_code,
+                id=compliance_id,  # Use compliance_id as document ID
                 body={
                     "doc": item,
                     "doc_as_upsert": True
                 }
             )
-            print(f"Successfully updated/created record for appCode: {app_code}")
+            print(f"Successfully updated/created record for complianceId: {compliance_id}")
         except Exception as e:
-            print(f"Error updating/creating record with appCode {app_code}: {e}")
+            print(f"Error updating/creating record with complianceId {compliance_id}: {e}")
 
 def main(argv):
     args = parse_arguments()
@@ -182,10 +179,23 @@ def main(argv):
     iipm_index_name = args.iipm_index_name
 
     compliance_data = load_json_file(json_file_path)
+    if compliance_data is None:
+        print("Failed to load compliance data. Exiting.")
+        sys.exit(1)
+    
     es = initialize_elasticsearch(es_url, es_service_id, es_password)
+    if es is None:
+        print("Failed to initialize Elasticsearch client. Exiting.")
+        sys.exit(1)
+    
     iipm_data = fetch_iipm_data(es, iipm_index_name)
+    if iipm_data is None:
+        print("Failed to fetch IIPM data. Exiting.")
+        sys.exit(1)
+    
     iipm_lookup = create_iipm_lookup(iipm_data)
     enrich_and_update_compliance_data(es, compliance_data, iipm_lookup, compliance_index_name)
+    print("Compliance data enrichment completed successfully.")
 
 if __name__ == '__main__':
     main(sys.argv[1:]) 
