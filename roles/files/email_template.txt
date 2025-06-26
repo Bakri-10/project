@@ -1,26 +1,26 @@
-Subject: {{ issue_types }} Report - {{ report_date }}
+Subject: Compliance Report - {{ report_date }} - All App Codes
 
-Hello Team,
+Dear Team,
 
-The automated {{ issue_types }} scan for application code {{ app_code }} has been completed.
+Please find attached the compliance report for {{ report_date }}.
 
-Summary:
-- Total {{ issue_types }} found: {{ total_vulnerabilities }}
-- Time period: {{ start_date }} to {{ end_date }}
-- Application code: {{ app_code }}
+Report Summary:
+- Total Issues: {{ total_issues }}
+- Open Issues: {{ open_issues_count }}
+- Application Codes: {{ app_codes }}
+- Issue Types: {{ issue_types }}
+- Generated At: {{ generated_at }}
 
-{% if high_severity_count > 0 %}
-ATTENTION: {{ high_severity_count }} high severity issues were detected that require immediate action.
-{% endif %}
+Open Issues Summary:
+| Issue Type | Severity | Affected Item | App Code | Issue State |
+|------------|----------|---------------|----------|-------------|
+{% for issue in open_issues %}
+| {{ issue._source.issueType | default('N/A') }} | {{ issue._source.severity | default('N/A') }} | {{ issue._source.affectedItemName | default('N/A') }} | {{ issue._source.appCode | default('N/A') }} | {{ issue._source.issueState | default('N/A') }} |
+{% endfor %}
 
-Please review the attached report for detailed information about the {{ issue_types }} issues.
+The detailed report is attached to this email for your review and action.
 
-The report includes:
-- Issue type: {{ issue_types }}
-- Severity level
-- Affected components
-- Remediation recommendations
+Please review the attached report and take necessary actions for the identified compliance issues.
 
-For questions or assistance, please contact the Security team.
-
-This is an automated message from the DevOps Vulnerability Management System. 
+Best regards,
+Automated Compliance Reporting System 
