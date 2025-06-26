@@ -6,7 +6,6 @@
     - raw_data_file is defined
     - output_dir is defined
     - role_path is defined
-    - survey_appcode is defined
     - vault_env is defined
     fail_msg: "Missing required variables. Please ensure all required variables are defined"
 
@@ -15,7 +14,6 @@
     processed_report: "{{ output_dir }}/vulnerability_report_processed.json"
     email_content_file: "{{ output_dir }}/email_content.txt"
     email_template: "{{ role_path }}/files/email_template.txt"
-    app_code: "{{ survey_appcode | upper }}"
     vault_environment: "{{ vault_env }}"
 
 - name: Ensure output directory exists
@@ -46,23 +44,40 @@
   register: report_data
   when: report_stat.stat.exists
 
-- name: Display direct report summary (like in process_data.yml)
+- name: Process compliance data for reporting
+  set_fact:
+    compliance_data_list: "{{ report_data.content | b64decode | from_json }}"
+    total_issues: "{{ (report_data.content | b64decode | from_json) | length }}"
+    app_codes_list: "{{ (report_data.content | b64decode | from_json) | map(attribute='_source.appCode') | list | unique }}"
+    issue_types_list: "{{ (report_data.content | b64decode | from_json) | map(attribute='_source.issueType') | list | unique }}"
+    open_issues: "{{ (report_data.content | b64decode | from_json) | selectattr('_source.issueState', 'equalto', 'OPEN') | list }}"
+  when: report_stat.stat.exists
+
+- name: Display compliance report summary
   debug:
     msg:
-    - "Report Summary (Direct Access):"
-    - "Total results: {{ (report_data.content | b64decode | from_json).summary.total_vulnerabilities }}"
-    - "High severity issues: {{ (report_data.content | b64decode | from_json).summary.high_severity_count }}"
-    - "Application codes: {{ (report_data.content | b64decode | from_json).summary.app_codes | join(', ') }}"
-    - "Issue types: {{ (report_data.content | b64decode | from_json).summary.issue_types | join(', ') }}"
-    - "Generated at: {{ (report_data.content | b64decode | from_json).summary.generated_at }}"
-    - "Date range: {{ (report_data.content | b64decode | from_json).summary.start_date }} to {{ (report_data.content | b64decode | from_json).summary.end_date }}"
-    - "Severity breakdown:"
-    - "  Critical: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.critical }}"
-    - "  High: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.high }}"
-    - "  Medium: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.medium }}"
-    - "  Low: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.low }}"
-    - "  Info: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.info }}"
+    - "Compliance Report Summary:"
+    - "Total issues: {{ total_issues }}"
+    - "Open issues: {{ open_issues | length }}"
+    - "Application codes: {{ app_codes_list | join(', ') }}"
+    - "Issue types: {{ issue_types_list | join(', ') }}"
+    - "Generated at: {{ ansible_date_time.iso8601 }}"
+    - ""
+    - "Open Issues Summary:"
+    - "| Issue Type | Severity | Affected Item | App Code | Issue State |"
+    - "|------------|----------|---------------|----------|-------------|"
   when: report_stat.stat.exists
+
+- name: Display open issues table
+  debug:
+    msg: "| {{ issue._source.issueType | default('N/A') }} | {{ issue._source.severity | default('N/A') }} | {{ issue._source.affectedItemName | default('N/A') }} | {{ issue._source.appCode | default('N/A') }} | {{ issue._source.issueState | default('N/A') }} |"
+  loop: "{{ open_issues }}"
+  loop_control:
+    loop_var: issue
+  when:
+  - report_stat.stat.exists
+  - open_issues is defined
+  - open_issues | length > 0
 
 - name: Get email recipient from vault
   block:
@@ -75,7 +90,6 @@
     set_fact:
       email_recipient: "{{ to }}"
 
-# Debug output to show what's in the report
 - name: Debug report values
   debug:
     msg: |
@@ -85,26 +99,21 @@
       - email_body excerpt: {{ email_content.content | b64decode | truncate(100) }}
   when: report_stat.stat.exists and email_stat.stat.exists
 
-- name: Send vulnerability report notification
+- name: Send compliance report notification
   ansible.builtin.include_role:
     name: rbc_sfmo.components.email
   vars:
-    appcode: "{{ app_code }}"
     email_to: "{{ email_recipient }}"
     email_cc: []
-    email_subject: "Issue Report - {{ ansible_date_time.date }} - {{ app_code }}"
-    issue_types: "{{ (report_data.content | b64decode | from_json).summary.issue_types | join(', ') }}"
+    email_subject: "Compliance Report - {{ ansible_date_time.date }} - All App Codes"
+    issue_types: "{{ issue_types_list | join(', ') }}"
     email_body: "{{ email_content.content | b64decode }}"
     email_env_domain: "{{ ansible_domain }}"
-    total_vulnerabilities: "{{ (report_data.content | b64decode | from_json).summary.total_vulnerabilities | int }}"
-    start_date: "{{ (report_data.content | b64decode | from_json).summary.start_date }}"
-    end_date: "{{ (report_data.content | b64decode | from_json).summary.end_date }}"
-    high_severity_count: "{{ (report_data.content | b64decode | from_json).summary.high_severity_count | int }}"
-    critical_count: "{{ (report_data.content | b64decode | from_json).summary.severity_breakdown.critical | int }}"
-    medium_count: "{{ (report_data.content | b64decode | from_json).summary.severity_breakdown.medium | int }}"
-    low_count: "{{ (report_data.content | b64decode | from_json).summary.severity_breakdown.low | int }}"
-    info_count: "{{ (report_data.content | b64decode | from_json).summary.severity_breakdown.info | int }}"
-    generated_at: "{{ (report_data.content | b64decode | from_json).summary.generated_at }}"
+    total_issues: "{{ total_issues }}"
+    open_issues_count: "{{ open_issues | length }}"
+    app_codes: "{{ app_codes_list | join(', ') }}"
+    open_issues: "{{ open_issues }}"
+    generated_at: "{{ ansible_date_time.iso8601 }}"
     report_date: "{{ ansible_date_time.date }}"
     email_attachments:
     - "{{ processed_report }}"
@@ -116,16 +125,10 @@
     msg: |
       Email notification details:
       - Sent to: {{ email_recipient }}
-      - App Code: {{ app_code }}
       - Environment: {{ vault_environment | upper }}
-      - Total issues: {{ (report_data.content | b64decode | from_json).summary.total_vulnerabilities | int }}
-      - Generated at: {{ (report_data.content | b64decode | from_json).summary.generated_at }}
-      - Date range: {{ (report_data.content | b64decode | from_json).summary.start_date }} to {{ (report_data.content | b64decode | from_json).summary.end_date }}
-      - Severity breakdown:
-        - Critical: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.critical }}
-        - High: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.high }}
-        - Medium: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.medium }}
-        - Low: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.low }}
-        - Info: {{ (report_data.content | b64decode | from_json).summary.severity_breakdown.info }}
-      - Issue types: {{ (report_data.content | b64decode | from_json).summary.issue_types | join(', ') }}
+      - Total issues: {{ total_issues }}
+      - Open issues: {{ open_issues | length }}
+      - Generated at: {{ ansible_date_time.iso8601 }}
+      - App Codes: {{ app_codes_list | join(', ') }}
+      - Issue Types: {{ issue_types_list | join(', ') }}
   when: report_stat.stat.exists and email_stat.stat.exists
